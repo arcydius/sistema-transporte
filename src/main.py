@@ -1,61 +1,47 @@
 import flet as ft
 
+# 1. Importamos nuestro componente reutilizable
+from components.sidebar import MenuLateral
+
+# 2. Importamos todas nuestras vistas
+from views.tablero_view import TableroView
+from views.fletes_view import FletesView
+from views.maestros_view import MaestrosView
+from views.mantenimiento_view import MantenimientoView
+from views.nomina_view import NominaView
+from views.configuracion_view import ConfiguracionView
+
 def main(page: ft.Page):
-    # Configuración básica del sistema
     page.title = "Sistema de Gestión - Transporte Montenegro"
     page.theme_mode = ft.ThemeMode.LIGHT 
 
-    # --- 1. CONTENIDO DINÁMICO (LAS PANTALLAS) ---
-    txt_tablero = ft.Text("Panel Principal: Alertas y Gráficos (Dashboard)", size=30)
-    txt_fletes = ft.Text("Módulo de Fletes: Registro de Viajes", size=30)
-    txt_choferes = ft.Text("Gestión de Choferes: Directorio", size=30)
+    # Agrupamos todas las vistas en una lista que coincide con el orden del menú
+    vistas = [
+        TableroView(),
+        FletesView(),
+        MaestrosView(),
+        MantenimientoView(),
+        NominaView(),
+        ConfiguracionView()
+    ]
 
-    # Contenedor central que cambiará mágicamente
+    # Contenedor central dinámico
     area_central = ft.Container(
         expand=True,
-        content=txt_tablero, # Arranca mostrando el tablero
+        content=vistas[0], # Arranca mostrando el Tablero
         padding=20
     )
 
-    # --- 2. LÓGICA DE CAMBIO DE MÓDULO ---
+    # Lógica centralizada para cambiar de pantalla
     def cambiar_modulo(e):
         indice = e.control.selected_index
-        if indice == 0:
-            area_central.content = txt_tablero
-        elif indice == 1:
-            area_central.content = txt_fletes
-        elif indice == 2:
-            area_central.content = txt_choferes
-            
-        page.update() # Refrescamos la pantalla
+        area_central.content = vistas[indice]
+        page.update()
 
-    # --- 3. TU MENÚ LATERAL FUNCIONAL ---
-    rail = ft.NavigationRail(
-        selected_index=0,
-        label_type=ft.NavigationRailLabelType.ALL,
-        min_width=100,
-        min_extended_width=200,
-        on_change=cambiar_modulo, # Conectamos tu menú a nuestra función
-        destinations=[
-            ft.NavigationRailDestination(
-                icon=ft.Icons.DASHBOARD_OUTLINED,
-                selected_icon=ft.Icons.DASHBOARD,
-                label="Tablero",
-            ),
-            ft.NavigationRailDestination(
-                icon=ft.Icons.LOCAL_SHIPPING_OUTLINED,
-                selected_icon=ft.Icons.LOCAL_SHIPPING,
-                label="Fletes",
-            ),
-            ft.NavigationRailDestination(
-                icon=ft.Icons.PEOPLE_OUTLINE,
-                selected_icon=ft.Icons.PEOPLE,
-                label="Choferes",
-            ),
-        ],
-    )
-
+    # Instanciamos el menú y le pasamos nuestra función
+    rail = MenuLateral(al_cambiar_ruta=cambiar_modulo)
     
+    # Ensamblaje de la interfaz
     page.add(
         ft.SafeArea(
             expand=True,
@@ -64,7 +50,7 @@ def main(page: ft.Page):
                 controls=[
                     ft.SelectionArea(content=rail),
                     ft.VerticalDivider(width=1),
-                    area_central, # Aquí inyectamos el área que cambia, reemplazando tu "Body!"
+                    area_central, 
                 ],
             ),
         )

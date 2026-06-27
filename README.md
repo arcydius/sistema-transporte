@@ -68,4 +68,38 @@ flet build web -v
 
 For more details on building Web app, refer to the [Web Packaging Guide](https://flet.dev/docs/publish/web/).
 
+# Configuración del Proyecto con `uv`
 
+## 1. Instalar `uv`
+Abre tu terminal y ejecuta el comando correspondiente a tu sistema operativo para instalar el gestor de paquetes:
+
+**Windows (PowerShell):**
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm [https://astral.sh/uv/install.ps1](https://astral.sh/uv/install.ps1) | iex"
+macOS / Linux:
+
+Bash
+curl -LsSf [https://astral.sh/uv/install.sh](https://astral.sh/uv/install.sh) | sh
+2. Clonar el repositorio
+Descarga el proyecto desde GitHub y entra en la carpeta:
+
+Bash
+git clone <URL_DEL_REPOSITORIO>
+cd transporte_montenegro
+3. Sincronizar el proyecto
+Al clonar el repositorio, las dependencias ya están declaradas en el archivo pyproject.toml. Para crear el entorno virtual automáticamente e instalar todo lo necesario de una sola vez, ejecuta:
+
+Bash
+uv sync
+4. Activar el entorno virtual
+Una vez finalizada la sincronización, activa el entorno:
+
+Windows: .venv\Scripts\activate
+
+macOS / Linux: source .venv/bin/activate
+
+5. Ejecutar la aplicación
+Con el entorno activado, levanta la interfaz gráfica con el siguiente comando:
+
+Bash
+uv run flet run src/main.py

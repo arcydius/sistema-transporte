@@ -1,237 +1,332 @@
 import flet as ft
 
+from controllers.maestro_controller import (
+    registrar_chofer, obtener_choferes, actualizar_chofer, eliminar_chofer,
+    registrar_camion, obtener_camiones, actualizar_camion, eliminar_camion,
+    registrar_cliente, obtener_clientes, actualizar_cliente, eliminar_cliente,
+    registrar_ruta, obtener_rutas, actualizar_ruta, eliminar_ruta,
+    registrar_tipo_mantenimiento, obtener_tipos_mantenimiento, actualizar_tipo_mantenimiento, eliminar_tipo_mantenimiento
+)
+
 def MaestrosView():
     # ==========================================
-    # 1. DATOS SIMULADOS (MOCK DATA)
+    # HERRAMIENTAS GLOBALES (NOTIFICACIONES Y FILTROS)
     # ==========================================
-    datos_choferes = [
-        {"cedula": "V-12345678", "nombre": "Ricardo Montenegro", "telefono": "0414-1234567", "estatus": "Activo"},
-        {"cedula": "V-87654321", "nombre": "Saúl Vera", "telefono": "0412-9876543", "estatus": "Activo"}
-    ]
-    
-    datos_flota = [
-        {"placa": "A123BC", "marca": "Mack (Optimus)", "tipo": "Chuto", "capacidad": "N/A"},
-        {"placa": "X987YZ", "marca": "Remolque 3 Ejes", "tipo": "Batea", "capacidad": "30 Ton"}
-    ]
-    
-    datos_clientes = [
-        {"rif": "J-12345678-9", "razon_social": "Empresa Polar", "contacto": "Juan Pérez", "telefono": "0414-1112233"},
-        {"rif": "J-98765432-1", "razon_social": "Construcciones C.A.", "contacto": "María Gómez", "telefono": "0412-3334455"}
-    ]
-    
-    datos_rutas = [
-        {"codigo": "R1", "origen": "Maracaibo", "destino": "Caracas", "costo": "$500"},
-        {"codigo": "R2", "origen": "Maracaibo", "destino": "Valencia", "costo": "$400"}
-    ]
+    def mostrar_mensaje(page, texto, color="green"):
+        page.snack_bar = ft.SnackBar(ft.Text(texto, color="white"), bgcolor=color)
+        page.snack_bar.open = True
+        page.update()
+
+    # Filtros reutilizables para no repetir código
+    filtro_numeros = ft.InputFilter(allow=True, regex_string=r"^[0-9]{0,12}$", replacement_string="")
+    filtro_letras = ft.InputFilter(allow=True, regex_string=r"^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]*$", replacement_string="")
+    filtro_placa = ft.InputFilter(allow=True, regex_string=r"^[a-zA-Z0-9]*$", replacement_string="")
+    filtro_decimal = ft.InputFilter(allow=True, regex_string=r"^[0-9]*\.?[0-9]*$", replacement_string="")
 
     # ==========================================
-    # 2. LÓGICA DE VENTANAS MODALES (MÉTODO OVERLAY)
+    # MODAL DE ELIMINACIÓN REUTILIZABLE PARA TODOS
     # ==========================================
-    # El método Overlay inyecta el modal en la capa superior sin fallar en ninguna versión
-    
-    def abrir_modal_chofer(e, datos=None):
-        titulo = "Editar Chofer" if datos else "Nuevo Chofer"
-        
-        tf_cedula = ft.TextField(label="Cédula", value=datos["cedula"] if datos else "")
-        tf_nombre = ft.TextField(label="Nombre Completo", value=datos["nombre"] if datos else "")
-        tf_telefono = ft.TextField(label="Teléfono", value=datos["telefono"] if datos else "")
-        
-        def cerrar(e_cerrar):
-            modal.open = False
-            e_cerrar.page.update()
-
-        def guardar(e_guardar):
-            print(f"[Simulación] Guardando chofer: {tf_nombre.value}...")
-            cerrar(e_guardar)
-
-        modal = ft.AlertDialog(
-            title=ft.Text(titulo),
-            content=ft.Column([tf_cedula, tf_nombre, tf_telefono], tight=True),
-            actions=[
-                ft.Button("Cancelar", on_click=cerrar),
-                ft.Button("Guardar", on_click=guardar, bgcolor="#1976d2", color="white"),
-            ],
-            actions_alignment=ft.MainAxisAlignment.END,
-        )
-        
-        # EL TRUCO INFALIBLE: Lo metemos en el overlay
-        e.page.overlay.append(modal)
-        modal.open = True
-        e.page.update()
-
-    def abrir_modal_eliminar(e, nombre):
-        def cerrar(e_cerrar):
+    def abrir_modal_eliminar(e, id_registro, nombre, funcion_eliminar, funcion_recargar):
+        def cerrar(e_cerrar=None):
             modal_eliminar.open = False
-            e_cerrar.page.update()
+            e.page.update()
 
         def confirmar(e_conf):
-            print(f"[Simulación] Eliminando a: {nombre}...")
-            cerrar(e_conf)
+            exito, mensaje = funcion_eliminar(id_registro) 
+            if exito:
+                mostrar_mensaje(e.page, mensaje, "green")
+                funcion_recargar() 
+            else:
+                mostrar_mensaje(e.page, mensaje, "red")
+            cerrar()
 
         modal_eliminar = ft.AlertDialog(
+            modal=True,
             title=ft.Text("Confirmar Eliminación", color="red"),
-            content=ft.Text(f"¿Estás seguro de que deseas dar de baja a {nombre}? Esta acción no se puede deshacer."),
+            content=ft.Text(f"¿Estás seguro de que deseas eliminar '{nombre}'?"),
             actions=[
                 ft.Button("Cancelar", on_click=cerrar),
                 ft.Button("Eliminar", icon=ft.Icons.DELETE_FOREVER, on_click=confirmar, bgcolor="red", color="white"),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        
         e.page.overlay.append(modal_eliminar)
         modal_eliminar.open = True
         e.page.update()
 
-    # Modal genérico para no repetir código visual en Flota, Clientes y Rutas
-    def abrir_modal_generico(e, modulo):
-        def cerrar(e_cerrar):
-            modal_gen.open = False
-            e_cerrar.page.update()
-
-        modal_gen = ft.AlertDialog(
-            title=ft.Text(f"Módulo: {modulo}"),
-            content=ft.Text("El CRUD de esta tabla lo conectará tu compañero del Backend."),
-            actions=[ft.Button("Entendido", on_click=cerrar)],
-        )
-        
-        e.page.overlay.append(modal_gen)
-        modal_gen.open = True
-        e.page.update()
-
     # ==========================================
-    # 3. CONSTRUCCIÓN DE LAS VISTAS Y TABLAS
+    # 1. CHOFERES
     # ==========================================
-    
-    # -- VISTA: CHOFERES --
-    filas_choferes = []
-    for c in datos_choferes:
-        filas_choferes.append(
-            ft.DataRow(cells=[
-                ft.DataCell(ft.Text(c["cedula"])),
-                ft.DataCell(ft.Text(c["nombre"])),
-                ft.DataCell(ft.Text(c["telefono"])),
-                ft.DataCell(ft.Text(c["estatus"])),
-                ft.DataCell(ft.Row([
-                    ft.IconButton(icon=ft.Icons.EDIT_OUTLINED, icon_color="blue", on_click=lambda e, data=c: abrir_modal_chofer(e, data)),
-                    ft.IconButton(icon=ft.Icons.DELETE_OUTLINE, icon_color="red", on_click=lambda e, nom=c["nombre"]: abrir_modal_eliminar(e, nom)),
-                ])),
-            ])
-        )
     tabla_choferes = ft.DataTable(
         columns=[
             ft.DataColumn(label=ft.Text("Cédula", weight=ft.FontWeight.BOLD)),
             ft.DataColumn(label=ft.Text("Nombre Completo", weight=ft.FontWeight.BOLD)),
             ft.DataColumn(label=ft.Text("Teléfono", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(label=ft.Text("Estatus", weight=ft.FontWeight.BOLD)),
             ft.DataColumn(label=ft.Text("Acciones", weight=ft.FontWeight.BOLD)),
-        ], rows=filas_choferes
+        ], rows=[]
     )
-    vista_choferes = ft.Column([
-        ft.Row([
-            ft.TextField(hint_text="Buscar por nombre o cédula...", prefix_icon=ft.Icons.SEARCH, expand=True),
-            ft.Button("Nuevo Chofer", icon=ft.Icons.ADD, bgcolor="#1976d2", color="white", on_click=abrir_modal_chofer)
-        ]), ft.Row([tabla_choferes], scroll=ft.ScrollMode.AUTO)
-    ])
 
-    # -- VISTA: FLOTA --
-    filas_flota = []
-    for f in datos_flota:
-        filas_flota.append(
-            ft.DataRow(cells=[
-                ft.DataCell(ft.Text(f["placa"])),
-                ft.DataCell(ft.Text(f["marca"])),
-                ft.DataCell(ft.Text(f["tipo"])),
-                ft.DataCell(ft.Text(f["capacidad"])),
+    def cargar_tabla_choferes():
+        tabla_choferes.rows.clear()
+        for c in obtener_choferes():
+            tabla_choferes.rows.append(ft.DataRow(cells=[
+                ft.DataCell(ft.Text(str(c.cedula_identidad))),
+                ft.DataCell(ft.Text(str(c.nombre_completo))),
+                ft.DataCell(ft.Text(str(c.contacto) if str(c.contacto) else "N/A")),
                 ft.DataCell(ft.Row([
-                    ft.IconButton(icon=ft.Icons.EDIT_OUTLINED, icon_color="blue", on_click=lambda e: abrir_modal_generico(e, "Editar Unidad")),
-                    ft.IconButton(icon=ft.Icons.DELETE_OUTLINE, icon_color="red", on_click=lambda e: abrir_modal_generico(e, "Eliminar Unidad")),
+                    ft.IconButton(icon=ft.Icons.EDIT, icon_color="blue", tooltip="Editar", on_click=lambda e, id_c=c.id_chofer, c_id=c.cedula_identidad, n=c.nombre_completo, t=c.contacto: abrir_modal_chofer(e, id_c, str(c_id), str(n), str(t) if str(t) else "")),
+                    ft.IconButton(icon=ft.Icons.DELETE_OUTLINE, icon_color="red", tooltip="Eliminar", on_click=lambda e, id_c=c.id_chofer, n=c.nombre_completo: abrir_modal_eliminar(e, id_c, n, eliminar_chofer, cargar_tabla_choferes)),
                 ])),
-            ])
+            ]))
+
+    def abrir_modal_chofer(e, id_chofer=None, cedula="", nombre="", telefono=""):
+        tf_cedula = ft.TextField(label="Cédula", value=cedula, hint_text="Ej: 12345678", keyboard_type=ft.KeyboardType.NUMBER, input_filter=ft.InputFilter(allow=True, regex_string=r"^[0-9]{0,8}$", replacement_string=""))
+        tf_nombre = ft.TextField(label="Nombre Completo", value=nombre, input_filter=filtro_letras)
+        tf_telefono = ft.TextField(label="Teléfono", value=telefono, hint_text="Ej: 04141234567", keyboard_type=ft.KeyboardType.NUMBER, input_filter=filtro_numeros)
+        
+        def cerrar(e_cerrar=None):
+            modal.open = False
+            e.page.update()
+
+        def guardar(e_guardar):
+            tf_cedula.error = "Requerido" if not tf_cedula.value else None
+            tf_nombre.error = "Requerido" if not tf_nombre.value else None
+            tf_telefono.error = "Requerido" if not tf_telefono.value else None
+
+            if not tf_cedula.value or not tf_nombre.value or not tf_telefono.value:
+                e.page.update()
+                return
+
+            if id_chofer: exito, msj = actualizar_chofer(id_chofer, tf_cedula.value, tf_nombre.value, tf_telefono.value)
+            else: exito, msj = registrar_chofer(tf_cedula.value, tf_nombre.value, tf_telefono.value)
+            
+            if exito:
+                mostrar_mensaje(e.page, msj); cargar_tabla_choferes(); cerrar()
+            else:
+                mostrar_mensaje(e.page, msj, "red") 
+
+        modal = ft.AlertDialog(
+            modal=True, title=ft.Text("Editar Chofer" if id_chofer else "Nuevo Chofer"),
+            content=ft.Column([tf_cedula, tf_nombre, tf_telefono], tight=True),
+            actions=[ft.Button("Cancelar", on_click=cerrar), ft.Button("Actualizar" if id_chofer else "Guardar", on_click=guardar, bgcolor="blue", color="white")],
+            actions_alignment=ft.MainAxisAlignment.END,
         )
-    tabla_flota = ft.DataTable(
+        e.page.overlay.append(modal); modal.open = True; e.page.update()
+
+    vista_choferes = ft.Column([ft.Row([ft.TextField(hint_text="Buscar...", prefix_icon=ft.Icons.SEARCH, expand=True), ft.Button("Nuevo Chofer", icon=ft.Icons.ADD, bgcolor="#1976d2", color="white", on_click=abrir_modal_chofer)]), ft.Row([tabla_choferes], scroll=ft.ScrollMode.AUTO)])
+
+    # ==========================================
+    # 2. CAMIONES (FLOTA)
+    # ==========================================
+    tabla_camiones = ft.DataTable(
         columns=[
             ft.DataColumn(label=ft.Text("Placa", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(label=ft.Text("Marca / Modelo", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(label=ft.Text("Tipo", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(label=ft.Text("Capacidad Max", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(label=ft.Text("Alias", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(label=ft.Text("Marca", weight=ft.FontWeight.BOLD)),
             ft.DataColumn(label=ft.Text("Acciones", weight=ft.FontWeight.BOLD)),
-        ], rows=filas_flota
+        ], rows=[]
     )
-    vista_flota = ft.Column([
-        ft.Row([
-            ft.TextField(hint_text="Buscar por placa...", prefix_icon=ft.Icons.SEARCH, expand=True),
-            ft.Button("Nueva Unidad", icon=ft.Icons.ADD, bgcolor="#1976d2", color="white", on_click=lambda e: abrir_modal_generico(e, "Nueva Unidad"))
-        ]), ft.Row([tabla_flota], scroll=ft.ScrollMode.AUTO)
-    ])
 
-    # -- VISTA: CLIENTES --
-    filas_clientes = []
-    for c in datos_clientes:
-        filas_clientes.append(
-            ft.DataRow(cells=[
-                ft.DataCell(ft.Text(c["rif"])),
-                ft.DataCell(ft.Text(c["razon_social"])),
-                ft.DataCell(ft.Text(c["contacto"])),
-                ft.DataCell(ft.Text(c["telefono"])),
+    def cargar_tabla_camiones():
+        tabla_camiones.rows.clear()
+        for c in obtener_camiones():
+            tabla_camiones.rows.append(ft.DataRow(cells=[
+                ft.DataCell(ft.Text(str(c.placa))),
+                ft.DataCell(ft.Text(str(c.alias_identificador) if str(c.alias_identificador) else "")),
+                ft.DataCell(ft.Text(str(c.marca) if str(c.marca) else "")),
                 ft.DataCell(ft.Row([
-                    ft.IconButton(icon=ft.Icons.EDIT_OUTLINED, icon_color="blue", on_click=lambda e: abrir_modal_generico(e, "Editar Cliente")),
-                    ft.IconButton(icon=ft.Icons.DELETE_OUTLINE, icon_color="red", on_click=lambda e: abrir_modal_generico(e, "Eliminar Cliente")),
+                    ft.IconButton(icon=ft.Icons.EDIT, icon_color="blue", tooltip="Editar", on_click=lambda e, id_c=c.id_camion, p=c.placa, a=c.alias_identificador, m=c.marca: abrir_modal_camion(e, id_c, str(p), str(a) if str(a) else "", str(m) if str(m) else "")),
+                    ft.IconButton(icon=ft.Icons.DELETE_OUTLINE, icon_color="red", tooltip="Eliminar", on_click=lambda e, id_c=c.id_camion, p=c.placa: abrir_modal_eliminar(e, id_c, p, eliminar_camion, cargar_tabla_camiones)),
                 ])),
-            ])
+            ]))
+
+    def abrir_modal_camion(e, id_camion=None, placa="", alias="", marca=""):
+        tf_placa = ft.TextField(label="Placa", value=placa, hint_text="Ej: A12B34C", max_length=7, input_filter=filtro_placa)
+        tf_alias = ft.TextField(label="Alias", value=alias)
+        tf_marca = ft.TextField(label="Marca", value=marca)
+        
+        def cerrar(e_cerrar=None):
+            modal.open = False; e.page.update()
+
+        def guardar(e_guardar):
+            tf_placa.error = "Requerido" if not tf_placa.value else None
+            if not tf_placa.value: e.page.update(); return
+
+            if id_camion: exito, msj = actualizar_camion(id_camion, tf_placa.value, tf_alias.value, tf_marca.value)
+            else: exito, msj = registrar_camion(tf_placa.value, tf_alias.value, tf_marca.value)
+            
+            if exito: mostrar_mensaje(e.page, msj); cargar_tabla_camiones(); cerrar()
+            else: mostrar_mensaje(e.page, msj, "red") 
+
+        modal = ft.AlertDialog(
+            modal=True, title=ft.Text("Editar Unidad" if id_camion else "Nueva Unidad"),
+            content=ft.Column([tf_placa, tf_alias, tf_marca], tight=True),
+            actions=[ft.Button("Cancelar", on_click=cerrar), ft.Button("Actualizar" if id_camion else "Guardar", on_click=guardar, bgcolor="blue", color="white")],
+            actions_alignment=ft.MainAxisAlignment.END,
         )
+        e.page.overlay.append(modal); modal.open = True; e.page.update()
+
+    vista_flota = ft.Column([ft.Row([ft.TextField(hint_text="Buscar...", prefix_icon=ft.Icons.SEARCH, expand=True), ft.Button("Nueva Unidad", icon=ft.Icons.ADD, bgcolor="#1976d2", color="white", on_click=abrir_modal_camion)]), ft.Row([tabla_camiones], scroll=ft.ScrollMode.AUTO)])
+
+    # ==========================================
+    # 3. CLIENTES
+    # ==========================================
     tabla_clientes = ft.DataTable(
         columns=[
-            ft.DataColumn(label=ft.Text("RIF", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(label=ft.Text("Razón Social", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(label=ft.Text("Nombre Cliente", weight=ft.FontWeight.BOLD)),
             ft.DataColumn(label=ft.Text("Contacto", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(label=ft.Text("Teléfono", weight=ft.FontWeight.BOLD)),
             ft.DataColumn(label=ft.Text("Acciones", weight=ft.FontWeight.BOLD)),
-        ], rows=filas_clientes
+        ], rows=[]
     )
-    vista_clientes = ft.Column([
-        ft.Row([
-            ft.TextField(hint_text="Buscar cliente...", prefix_icon=ft.Icons.SEARCH, expand=True),
-            ft.Button("Nuevo Cliente", icon=ft.Icons.ADD, bgcolor="#1976d2", color="white", on_click=lambda e: abrir_modal_generico(e, "Nuevo Cliente"))
-        ]), ft.Row([tabla_clientes], scroll=ft.ScrollMode.AUTO)
-    ])
 
-    # -- VISTA: RUTAS --
-    filas_rutas = []
-    for r in datos_rutas:
-        filas_rutas.append(
-            ft.DataRow(cells=[
-                ft.DataCell(ft.Text(r["codigo"])),
-                ft.DataCell(ft.Text(r["origen"])),
-                ft.DataCell(ft.Text(r["destino"])),
-                ft.DataCell(ft.Text(r["costo"])),
+    def cargar_tabla_clientes():
+        tabla_clientes.rows.clear()
+        for c in obtener_clientes():
+            tabla_clientes.rows.append(ft.DataRow(cells=[
+                ft.DataCell(ft.Text(str(c.nombre_cliente))),
+                ft.DataCell(ft.Text(str(c.contacto_principal) if str(c.contacto_principal) else "")),
                 ft.DataCell(ft.Row([
-                    ft.IconButton(icon=ft.Icons.EDIT_OUTLINED, icon_color="blue", on_click=lambda e: abrir_modal_generico(e, "Editar Ruta")),
-                    ft.IconButton(icon=ft.Icons.DELETE_OUTLINE, icon_color="red", on_click=lambda e: abrir_modal_generico(e, "Eliminar Ruta")),
+                    ft.IconButton(icon=ft.Icons.EDIT, icon_color="blue", tooltip="Editar", on_click=lambda e, id_c=c.id_cliente, n=c.nombre_cliente, t=c.contacto_principal: abrir_modal_cliente(e, id_c, str(n), str(t) if str(t) else "")),
+                    ft.IconButton(icon=ft.Icons.DELETE_OUTLINE, icon_color="red", tooltip="Eliminar", on_click=lambda e, id_c=c.id_cliente, n=c.nombre_cliente: abrir_modal_eliminar(e, id_c, n, eliminar_cliente, cargar_tabla_clientes)),
                 ])),
-            ])
+            ]))
+
+    def abrir_modal_cliente(e, id_cliente=None, nombre="", contacto=""):
+        tf_nombre = ft.TextField(label="Nombre / Empresa", value=nombre, input_filter=filtro_letras)
+        tf_contacto = ft.TextField(label="Teléfono", value=contacto, keyboard_type=ft.KeyboardType.NUMBER, input_filter=filtro_numeros)
+        
+        def cerrar(e_cerrar=None):
+            modal.open = False; e.page.update()
+
+        def guardar(e_guardar):
+            tf_nombre.error = "Requerido" if not tf_nombre.value else None
+            if not tf_nombre.value: e.page.update(); return
+
+            if id_cliente: exito, msj = actualizar_cliente(id_cliente, tf_nombre.value, tf_contacto.value)
+            else: exito, msj = registrar_cliente(tf_nombre.value, tf_contacto.value)
+            
+            if exito: mostrar_mensaje(e.page, msj); cargar_tabla_clientes(); cerrar()
+            else: mostrar_mensaje(e.page, msj, "red") 
+
+        modal = ft.AlertDialog(
+            modal=True, title=ft.Text("Editar Cliente" if id_cliente else "Nuevo Cliente"),
+            content=ft.Column([tf_nombre, tf_contacto], tight=True),
+            actions=[ft.Button("Cancelar", on_click=cerrar), ft.Button("Actualizar" if id_cliente else "Guardar", on_click=guardar, bgcolor="blue", color="white")],
+            actions_alignment=ft.MainAxisAlignment.END,
         )
+        e.page.overlay.append(modal); modal.open = True; e.page.update()
+
+    vista_clientes = ft.Column([ft.Row([ft.TextField(hint_text="Buscar...", prefix_icon=ft.Icons.SEARCH, expand=True), ft.Button("Nuevo Cliente", icon=ft.Icons.ADD, bgcolor="#1976d2", color="white", on_click=abrir_modal_cliente)]), ft.Row([tabla_clientes], scroll=ft.ScrollMode.AUTO)])
+
+    # ==========================================
+    # 4. RUTAS
+    # ==========================================
     tabla_rutas = ft.DataTable(
         columns=[
-            ft.DataColumn(label=ft.Text("Código", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(label=ft.Text("Origen", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(label=ft.Text("Destino", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(label=ft.Text("Ruta/Trayecto", weight=ft.FontWeight.BOLD)),
             ft.DataColumn(label=ft.Text("Costo Sugerido", weight=ft.FontWeight.BOLD)),
             ft.DataColumn(label=ft.Text("Acciones", weight=ft.FontWeight.BOLD)),
-        ], rows=filas_rutas
+        ], rows=[]
     )
-    vista_rutas = ft.Column([
-        ft.Row([
-            ft.TextField(hint_text="Buscar ruta...", prefix_icon=ft.Icons.SEARCH, expand=True),
-            ft.Button("Nueva Ruta", icon=ft.Icons.ADD, bgcolor="#1976d2", color="white", on_click=lambda e: abrir_modal_generico(e, "Nueva Ruta"))
-        ]), ft.Row([tabla_rutas], scroll=ft.ScrollMode.AUTO)
-    ])
 
+    def cargar_tabla_rutas():
+        tabla_rutas.rows.clear()
+        for r in obtener_rutas():
+            tabla_rutas.rows.append(ft.DataRow(cells=[
+                ft.DataCell(ft.Text(str(r.descripcion_trayecto))),
+                ft.DataCell(ft.Text(f"${r.costo_unitario_sugerido}")),
+                ft.DataCell(ft.Row([
+                    ft.IconButton(icon=ft.Icons.EDIT, icon_color="blue", tooltip="Editar", on_click=lambda e, id_r=r.id_ruta, d=r.descripcion_trayecto, c=r.costo_unitario_sugerido: abrir_modal_ruta(e, id_r, str(d), str(c))),
+                    ft.IconButton(icon=ft.Icons.DELETE_OUTLINE, icon_color="red", tooltip="Eliminar", on_click=lambda e, id_r=r.id_ruta, d=r.descripcion_trayecto: abrir_modal_eliminar(e, id_r, d, eliminar_ruta, cargar_tabla_rutas)),
+                ])),
+            ]))
+
+    def abrir_modal_ruta(e, id_ruta=None, desc="", costo=""):
+        tf_desc = ft.TextField(label="Descripción de la Ruta", value=desc)
+        tf_costo = ft.TextField(label="Costo Sugerido ($)", value=costo, hint_text="Ej: 150.50", keyboard_type=ft.KeyboardType.NUMBER, input_filter=filtro_decimal)
+        
+        def cerrar(e_cerrar=None):
+            modal.open = False; e.page.update()
+
+        def guardar(e_guardar):
+            tf_desc.error = "Requerido" if not tf_desc.value else None
+            if not tf_desc.value: e.page.update(); return
+
+            if id_ruta: exito, msj = actualizar_ruta(id_ruta, tf_desc.value, tf_costo.value)
+            else: exito, msj = registrar_ruta(tf_desc.value, tf_costo.value)
+            
+            if exito: mostrar_mensaje(e.page, msj); cargar_tabla_rutas(); cerrar()
+            else: mostrar_mensaje(e.page, msj, "red") 
+
+        modal = ft.AlertDialog(
+            modal=True, title=ft.Text("Editar Ruta" if id_ruta else "Nueva Ruta"),
+            content=ft.Column([tf_desc, tf_costo], tight=True),
+            actions=[ft.Button("Cancelar", on_click=cerrar), ft.Button("Actualizar" if id_ruta else "Guardar", on_click=guardar, bgcolor="blue", color="white")],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        e.page.overlay.append(modal); modal.open = True; e.page.update()
+
+    vista_rutas = ft.Column([ft.Row([ft.TextField(hint_text="Buscar...", prefix_icon=ft.Icons.SEARCH, expand=True), ft.Button("Nueva Ruta", icon=ft.Icons.ADD, bgcolor="#1976d2", color="white", on_click=abrir_modal_ruta)]), ft.Row([tabla_rutas], scroll=ft.ScrollMode.AUTO)])
 
     # ==========================================
-    # 4. SISTEMA NATIVO DE PESTAÑAS
+    # 5. TIPOS DE MANTENIMIENTO
     # ==========================================
+    tabla_mantenimientos = ft.DataTable(
+        columns=[
+            ft.DataColumn(label=ft.Text("Tipo de Servicio", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(label=ft.Text("Acciones", weight=ft.FontWeight.BOLD)),
+        ], rows=[]
+    )
+
+    def cargar_tabla_mantenimientos():
+        tabla_mantenimientos.rows.clear()
+        for t in obtener_tipos_mantenimiento():
+            tabla_mantenimientos.rows.append(ft.DataRow(cells=[
+                ft.DataCell(ft.Text(str(t.nombre_tipo))),
+                ft.DataCell(ft.Row([
+                    ft.IconButton(icon=ft.Icons.EDIT, icon_color="blue", tooltip="Editar", on_click=lambda e, id_t=t.id_tipo, n=t.nombre_tipo: abrir_modal_mantenimiento(e, id_t, str(n))),
+                    ft.IconButton(icon=ft.Icons.DELETE_OUTLINE, icon_color="red", tooltip="Eliminar", on_click=lambda e, id_t=t.id_tipo, n=t.nombre_tipo: abrir_modal_eliminar(e, id_t, n, eliminar_tipo_mantenimiento, cargar_tabla_mantenimientos)),
+                ])),
+            ]))
+
+    def abrir_modal_mantenimiento(e, id_tipo=None, nombre=""):
+        tf_nombre = ft.TextField(label="Nombre del Servicio", value=nombre, hint_text="Ej: Cambio de Aceite", input_filter=filtro_letras)
+        
+        def cerrar(e_cerrar=None):
+            modal.open = False; e.page.update()
+
+        def guardar(e_guardar):
+            tf_nombre.error = "Requerido" if not tf_nombre.value else None
+            if not tf_nombre.value: e.page.update(); return
+
+            if id_tipo: exito, msj = actualizar_tipo_mantenimiento(id_tipo, tf_nombre.value)
+            else: exito, msj = registrar_tipo_mantenimiento(tf_nombre.value)
+            
+            if exito: mostrar_mensaje(e.page, msj); cargar_tabla_mantenimientos(); cerrar()
+            else: mostrar_mensaje(e.page, msj, "red") 
+
+        modal = ft.AlertDialog(
+            modal=True, title=ft.Text("Editar Mantenimiento" if id_tipo else "Nuevo Mantenimiento"),
+            content=ft.Column([tf_nombre], tight=True),
+            actions=[ft.Button("Cancelar", on_click=cerrar), ft.Button("Actualizar" if id_tipo else "Guardar", on_click=guardar, bgcolor="blue", color="white")],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        e.page.overlay.append(modal); modal.open = True; e.page.update()
+
+    vista_mantenimientos = ft.Column([ft.Row([ft.TextField(hint_text="Buscar...", prefix_icon=ft.Icons.SEARCH, expand=True), ft.Button("Nuevo Servicio", icon=ft.Icons.ADD, bgcolor="#1976d2", color="white", on_click=abrir_modal_mantenimiento)]), ft.Row([tabla_mantenimientos], scroll=ft.ScrollMode.AUTO)])
+
+    # ==========================================
+    # CARGA INICIAL Y ENSAMBLAJE DE PESTAÑAS
+    # ==========================================
+    cargar_tabla_choferes()
+    cargar_tabla_camiones()
+    cargar_tabla_clientes()
+    cargar_tabla_rutas()
+    cargar_tabla_mantenimientos()
+
+    # Respetando intacta tu estructura de pestañas funcionales (con la 5ta agregada)
     pestanas_nativas = ft.Tabs(
-        length=4,
+        length=5,
         expand=True,
         content=ft.Column(
             expand=True,
@@ -239,9 +334,10 @@ def MaestrosView():
                 ft.TabBar(
                     tabs=[
                         ft.Tab(label="Choferes", icon=ft.Icons.PEOPLE),
-                        ft.Tab(label="Flota", icon=ft.Icons.LOCAL_SHIPPING),
+                        ft.Tab(label="Camiones", icon=ft.Icons.LOCAL_SHIPPING),
                         ft.Tab(label="Clientes", icon=ft.Icons.BUSINESS),
                         ft.Tab(label="Rutas", icon=ft.Icons.MAP),
+                        ft.Tab(label="Mantenimientos", icon=ft.Icons.BUILD),
                     ]
                 ),
                 ft.TabBarView(
@@ -251,18 +347,15 @@ def MaestrosView():
                         ft.Container(content=vista_flota, padding=20),
                         ft.Container(content=vista_clientes, padding=20),
                         ft.Container(content=vista_rutas, padding=20),
+                        ft.Container(content=vista_mantenimientos, padding=20),
                     ],
                 ),
             ],
         ),
     )
 
-    # ==========================================
-    # 5. RETORNO FINAL
-    # ==========================================
     return ft.Container(
-        padding=20,
-        expand=True,
+        padding=20, expand=True,
         content=ft.Column([
             ft.Text("Datos Maestros y Directorios", size=28, weight=ft.FontWeight.BOLD, color="black87"),
             ft.Divider(height=20, color="transparent"),

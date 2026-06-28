@@ -8,7 +8,9 @@ authors = [
     { name = "Flet developer", email = "you@example.com" }
 ]
 dependencies = [
-    "flet>=0.85.3"
+    "flet>=0.85.3",
+    "psycopg[binary]>=3.3.4",
+    "sqlalchemy>=2.0.51",
 ]
 
 [dependency-groups]

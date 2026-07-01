@@ -1,0 +1,48 @@
+from database.config import SessionLocal
+from models.operaciones import Viaje
+from decimal import Decimal
+import datetime
+
+class FletesController:
+    @staticmethod
+    def registrar_viaje(id_chofer: int, id_camion: int, id_cliente: int, id_ruta: int,
+                        cantidad_fletes: int, costo_unitario: float, monto_mora: float,
+                        litros_gasoil: float, precio_litro: float, id_remolque: int = None):
+        db = SessionLocal()
+        try:
+            # Calcular matemáticamente el costo total del combustible
+            litros = Decimal(str(litros_gasoil or 0))
+            precio = Decimal(str(precio_litro or 0))
+            total_gasoil = litros * precio
+
+            nuevo_viaje = Viaje(
+                fecha_operacion=datetime.date.today(),
+                id_chofer=id_chofer,
+                id_camion=id_camion,
+                id_cliente=id_cliente,
+                id_ruta=id_ruta,
+                id_remolque=id_remolque if id_remolque else None,
+                cantidad_fletes=cantidad_fletes,
+                costo_unitario_aplicado=Decimal(str(costo_unitario or 0)),
+                monto_mora_espera=Decimal(str(monto_mora or 0)),
+                litros_gasoil_consumido=litros,
+                precio_litro_gasoil=precio,
+                costo_total_gasoil=total_gasoil,
+                estatus_pago_cliente='Pendiente'  # Por defecto al iniciar
+            )
+            db.add(nuevo_viaje)
+            db.commit()
+            return True, "Viaje operativo registrado con éxito."
+        except Exception as e:
+            db.rollback()
+            return False, f"Error operativo: {str(e)}"
+        finally:
+            db.close()
+
+    @staticmethod
+    def obtener_historial():
+        db = SessionLocal()
+        try:
+            return db.query(Viaje).order_by(Viaje.fecha_operacion.desc()).all()
+        finally:
+            db.close()

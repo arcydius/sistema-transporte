@@ -1,0 +1,58 @@
+from database.config import SessionLocal
+from models.maestros import Chofer
+
+class ChoferesController:
+    @staticmethod
+    def registrar(cedula: str, nombre: str, contacto: str):
+        db = SessionLocal()
+        try:
+            nuevo = Chofer(cedula_identidad=cedula, nombre_completo=nombre, contacto=contacto)
+            db.add(nuevo)
+            db.commit()
+            return True, "Chofer registrado exitosamente."
+        except Exception as e:
+            db.rollback()
+            return False, f"Error: {str(e)}"
+        finally:
+            db.close()
+
+    @staticmethod
+    def obtener_todos():
+        db = SessionLocal()
+        try:
+            return db.query(Chofer).order_by(Chofer.nombre_completo).all()
+        finally:
+            db.close()
+
+    @staticmethod
+    def actualizar(id_chofer: int, cedula: str, nombre: str, contacto: str):
+        db = SessionLocal()
+        try:
+            chofer = db.query(Chofer).filter(Chofer.id_chofer == id_chofer).first()
+            if not chofer: return False, "Chofer no encontrado."
+            chofer.cedula_identidad = cedula
+            chofer.nombre_completo = nombre
+            chofer.contacto = contacto
+            db.commit()
+            return True, "Chofer actualizado."
+        except Exception as e:
+            db.rollback()
+            return False, f"Error: {str(e)}"
+        finally:
+            db.close()
+
+    @staticmethod
+    def eliminar(id_chofer: int):
+        db = SessionLocal()
+        try:
+            chofer = db.query(Chofer).filter(Chofer.id_chofer == id_chofer).first()
+            if chofer:
+                db.delete(chofer)
+                db.commit()
+                return True, "Chofer eliminado."
+            return False, "No encontrado."
+        except Exception as e:
+            db.rollback()
+            return False, f"Error al eliminar: {str(e)}"
+        finally:
+            db.close()

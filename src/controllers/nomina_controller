@@ -1,0 +1,54 @@
+from database.config import SessionLocal
+from models.operaciones import Nomina, Viaje
+from decimal import Decimal
+import datetime
+
+class NominaController:
+    @staticmethod
+    def calcular_y_emitir(id_chofer: int, fecha_desde: datetime.date, fecha_hasta: datetime.date, porcentaje_comision: float = 0.15):
+        db = SessionLocal()
+        try:
+            # Buscar viajes elegibles para cobro
+            viajes = db.query(Viaje).filter(
+                Viaje.id_chofer == id_chofer,
+                Viaje.fecha_operacion >= fecha_desde,
+                Viaje.fecha_operacion <= fecha_hasta,
+                Viaje.id_nomina_pago == None
+            ).all()
+
+            if not viajes:
+                return False, "No existen fletes pendientes de cobro en este rango."
+
+            total_fletes = Decimal("0.00")
+            total_gasoil = Decimal("0.00")
+
+            for v in viajes:
+                total_fletes += Decimal(str(v.cantidad_fletes or 0)) * Decimal(str(v.costo_unitario_aplicado or 0))
+                total_gasoil += Decimal(str(v.costo_total_gasoil or 0))
+
+            # Comisión neta asignada al conductor
+            comision = total_fletes * Decimal(str(porcentaje_comision))
+
+            nueva_nomina = Nomina(
+                id_chofer=id_chofer,
+                fecha_emision=datetime.date.today(),
+                periodo_desde=fecha_desde,
+                periodo_hasta=fecha_hasta,
+                total_ingresos_fletes=total_fletes,
+                total_costo_gasoil=total_gasoil,
+                monto_neto_comision=comision
+            )
+            db.add(nueva_nomina)
+            db.flush()
+
+            # Vincular viajes a esta nómina específica para que queden marcados como pagados
+            for v in viajes:
+                v.id_nomina_pago = nueva_nomina.id_nomina
+
+            db.commit()
+            return True, f"Nómina generada exitosamente por un total de ${comision:.2f}."
+        except Exception as e:
+            db.rollback()
+            return False, f"Error financiero: {str(e)}"
+        finally:
+            db.close()

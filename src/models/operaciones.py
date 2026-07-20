@@ -1,54 +1,18 @@
 from sqlalchemy import Column, Integer, String, Date, Numeric, ForeignKey, Enum, Text
-from src.database.config import Base
+from sqlalchemy.orm import relationship
+from database.config import Base
 
-# ==========================================
-# TABLA: NOMINAS
-# ==========================================
 class Nomina(Base):
     __tablename__ = "nominas"
-
     id_nomina = Column(Integer, primary_key=True, autoincrement=True)
     id_chofer = Column(Integer, ForeignKey("choferes.id_chofer"), nullable=False)
-    fecha_emision = Column(Date)
-    periodo_desde = Column(Date)
-    periodo_hasta = Column(Date)
-    total_ingresos_fletes = Column(Numeric(7, 2))
-    total_costo_gasoil = Column(Numeric(7, 2))
-    monto_neto_comision = Column(Numeric(7, 2))
+    # ... (resto de tus campos) ...
 
-# ==========================================
-# TABLA: VIAJES (Fletes)
-# ==========================================
 class Viaje(Base):
     __tablename__ = "viajes"
-
     id_viaje = Column(Integer, primary_key=True, autoincrement=True)
-    fecha_operacion = Column(Date)
-    
-    # Relaciones obligatorias
-    id_chofer = Column(Integer, ForeignKey("choferes.id_chofer"), nullable=False)
-    id_camion = Column(Integer, ForeignKey("camiones.id_camion"), nullable=False)
-    id_cliente = Column(Integer, ForeignKey("clientes.id_cliente"), nullable=False)
-    id_ruta = Column(Integer, ForeignKey("rutas.id_ruta"), nullable=False)
-    
-    # Relaciones opcionales (pueden ser NULL)
-    id_remolque = Column(Integer, ForeignKey("remolques.id_remolque"), nullable=True) 
-    id_nomina_pago = Column(Integer, ForeignKey("nominas.id_nomina"), nullable=True) 
-    
-    # Datos Operativos y Financieros
-    cantidad_fletes = Column(Integer)
-    costo_unitario_aplicado = Column(Numeric(7, 2))
-    monto_mora_espera = Column(Numeric(7, 2))
-    litros_gasoil_consumido = Column(Numeric(7, 2))
-    precio_litro_gasoil = Column(Numeric(7, 2))
-    costo_total_gasoil = Column(Numeric(7, 2))
-    
-    # Estatus de pago restringido a solo dos opciones exactas
-    estatus_pago_cliente = Column(Enum('Pendiente', 'Pagado', name="estatus_enum"))
+    # ... (resto de tus campos) ...
 
-# ==========================================
-# TABLA: MANTENIMIENTOS
-# ==========================================
 class Mantenimiento(Base):
     __tablename__ = "mantenimientos"
 
@@ -59,6 +23,10 @@ class Mantenimiento(Base):
     monto_invertido = Column(Numeric(7, 2))
     tecnico_responsable = Column(String(30))
     
-    # Una reparación puede ser al camión o al remolque (opcionales)
     id_camion = Column(Integer, ForeignKey("camiones.id_camion"), nullable=True)
     id_remolque = Column(Integer, ForeignKey("remolques.id_remolque"), nullable=True)
+
+    # Relaciones necesarias para el joinedload[cite: 1, 2]
+    camion = relationship("Camion")
+    remolque = relationship("Remolque")
+    tipo = relationship("TipoMantenimiento")

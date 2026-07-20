@@ -1,6 +1,9 @@
 from database.config import SessionLocal
-from models.maestros import Chofer, Camion, Cliente, Ruta, TipoMantenimiento
+from models.maestros import Chofer, Camion, Cliente, Ruta, TipoMantenimiento, Remolque
+from models.operaciones import Mantenimiento
+from sqlalchemy.orm import joinedload
 from decimal import Decimal
+import datetime
 
 # ==========================================
 # 1. CHOFERES
@@ -51,7 +54,7 @@ def eliminar_chofer(id_chofer):
 
 
 # ==========================================
-# 2. CAMIONES (FLOTA)
+# 2. CAMIONES Y REMOLQUES (FLOTA)
 # ==========================================
 def registrar_camion(placa, alias, marca):
     db = SessionLocal()
@@ -68,6 +71,11 @@ def registrar_camion(placa, alias, marca):
 def obtener_camiones():
     db = SessionLocal()
     try: return db.query(Camion).order_by(Camion.placa).all()
+    finally: db.close()
+
+def obtener_remolques():
+    db = SessionLocal()
+    try: return db.query(Remolque).order_by(Remolque.placa).all()
     finally: db.close()
 
 def actualizar_camion(id_camion, placa, alias, marca):
@@ -152,7 +160,6 @@ def eliminar_cliente(id_cliente):
 def registrar_ruta(descripcion, costo):
     db = SessionLocal()
     try:
-        # Usamos Decimal en lugar de float para proteger la precisión financiera
         costo_val = Decimal(costo) if costo else Decimal("0.00")
         nueva_ruta = Ruta(descripcion_trayecto=descripcion, costo_unitario_sugerido=costo_val)
         db.add(nueva_ruta)
@@ -174,7 +181,6 @@ def actualizar_ruta(id_ruta, descripcion, costo):
         ruta = db.query(Ruta).filter(Ruta.id_ruta == id_ruta).first()
         if not ruta: return False, "No encontrado."
         ruta.descripcion_trayecto = descripcion
-        # Usamos Decimal aquí también
         ruta.costo_unitario_sugerido = Decimal(costo) if costo else Decimal("0.00") # type: ignore
         db.commit()
         return True, "Ruta actualizada."
@@ -199,7 +205,7 @@ def eliminar_ruta(id_ruta):
 
 
 # ==========================================
-# 5. TIPOS DE MANTENIMIENTO
+# 5. TIPOS DE MANTENIMIENTO Y HISTORIAL
 # ==========================================
 def registrar_tipo_mantenimiento(nombre):
     db = SessionLocal()
@@ -244,3 +250,38 @@ def eliminar_tipo_mantenimiento(id_tipo):
         db.rollback()
         return False, f"Error: {str(e)}"
     finally: db.close()
+
+def registrar_mantenimiento(id_tipo: int, descripcion: str, monto: float, tecnico: str, id_camion: int = None, id_remolque: int = None):
+    db = SessionLocal()
+    try:
+        nuevo = Mantenimiento(
+            id_tipo=id_tipo,
+            fecha_servicio=datetime.date.today(),
+            descripcion_trabajo=descripcion,
+            monto_invertido=Decimal(str(monto or 0)),
+            tecnico_responsable=tecnico,
+            id_camion=id_camion if id_camion else None,
+            id_remolque=id_remolque if id_remolque else None
+        )
+        db.add(nuevo)
+        db.commit()
+        return True, "Orden de mantenimiento registrada correctamente."
+    except Exception as e:
+        db.rollback()
+        return False, f"Error al guardar: {str(e)}"
+    finally:
+        db.close()
+
+def obtener_historial_mantenimiento():
+    db = SessionLocal()
+    try:
+        return db.query(Mantenimiento).options(
+            joinedload(Mantenimiento.camion),
+            joinedload(Mantenimiento.remolque),
+            joinedload(Mantenimiento.tipo)
+        ).order_by(Mantenimiento.fecha_servicio.desc()).all()
+    except Exception as e:
+        print(f"Error al obtener historial: {e}")
+        return []
+    finally:
+        db.close()

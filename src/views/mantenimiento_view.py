@@ -1,157 +1,261 @@
 import flet as ft
-import datetime
+from controllers.maestro_controller import (
+    obtener_camiones, 
+    obtener_tipos_mantenimiento, 
+    registrar_mantenimiento, 
+    obtener_historial_mantenimiento
+)
 
-def MantenimientoView():
-    # ==========================================
-    # 1. DATOS SIMULADOS (MOCK DATA)
-    # ==========================================
-    datos_historial = [
-        {"fecha": "20/06/2026", "unidad": "Mack (A123BC)", "tipo": "Preventivo", "tecnico": "Carlos Ruiz", "monto": "$150.00"},
-        {"fecha": "15/06/2026", "unidad": "Remolque (X987YZ)", "tipo": "Neumáticos", "tecnico": "Luis Pérez", "monto": "$400.00"},
-    ]
-
-    opciones_unidades = [
-        ft.dropdown.Option("Mack - A123BC (Chuto)"), 
-        ft.dropdown.Option("Ford - B456 (Chuto)"),
-        ft.dropdown.Option("Remolque 3 Ejes - X987YZ")
-    ]
-    
-    opciones_tipos = [
-        ft.dropdown.Option("Preventivo"),
-        ft.dropdown.Option("Correctivo"),
-        ft.dropdown.Option("Neumáticos"),
-        ft.dropdown.Option("Fluidos y Filtros"),
-        ft.dropdown.Option("Otro") 
-    ]
-
-    # ==========================================
-    # 2. LÓGICA DEL FORMULARIO Y CALENDARIO
-    # ==========================================
-    padding_uniforme = ft.Padding.symmetric(vertical=10, horizontal=12)
-
-    # --- Controles del Formulario (Sin parámetro 'dense') ---
-    tf_fecha = ft.TextField(
-        label="Fecha del Servicio", value=datetime.datetime.now().strftime("%d/%m/%Y"), 
-        read_only=True, expand=1, content_padding=padding_uniforme
-    )
-    dd_unidad = ft.Dropdown(label="Unidad", options=opciones_unidades, expand=1, content_padding=padding_uniforme)
-    tf_tecnico = ft.TextField(label="Técnico Responsable", expand=1, content_padding=padding_uniforme)
-    tf_monto = ft.TextField(label="Costo ($)", input_filter=ft.NumbersOnlyInputFilter(), expand=1, content_padding=padding_uniforme)
-    tf_descripcion = ft.TextField(label="Descripción del servicio", multiline=True, min_lines=3, max_lines=5)
-    
-    tf_otro_tipo = ft.TextField(label="Especifique el tipo de servicio", visible=False, expand=1, content_padding=padding_uniforme)
-
-    def al_cambiar_tipo(e):
-        if dd_tipo.value == "Otro":
-            tf_otro_tipo.visible = True
-        else:
-            tf_otro_tipo.visible = False
-            tf_otro_tipo.value = "" 
-        tf_otro_tipo.update()
-
-    dd_tipo = ft.Dropdown(label="Tipo de Servicio", options=opciones_tipos, expand=1, content_padding=padding_uniforme, on_select=al_cambiar_tipo)
-
-    # --- Lógica del Calendario ---
-    def fecha_seleccionada(e):
-        if e.control.value:
-            tf_fecha.value = e.control.value.strftime("%d/%m/%Y")
-            tf_fecha.update()
-
-    calendario = ft.DatePicker(on_change=fecha_seleccionada)
-    
-    def abrir_calendario(e):
-        if calendario not in e.page.overlay:
-            e.page.overlay.append(calendario)
-        calendario.open = True
-        e.page.update()
-
-    # Botón del calendario incrustado
-    tf_fecha.suffix = ft.Container(
-        content=ft.Icon(ft.Icons.CALENDAR_MONTH, color="#1976d2", size=20),
-        on_click=abrir_calendario, padding=0, margin=ft.Margin.only(right=5), tooltip="Seleccionar fecha"
-    )
-
-    # --- Lógica del Modal (Overlay) ---
-    def abrir_modal_servicio(e):
-        def cerrar(e_cerrar):
-            modal.open = False
-            e_cerrar.page.update()
-
-        def guardar(e_guardar):
-            print(f"[Simulación] Guardando servicio de {dd_unidad.value}...")
-            cerrar(e_guardar)
-
-        modal = ft.AlertDialog(
-            title=ft.Text("Registrar Servicio de Taller"),
-            content=ft.Container(
-                width=600,
-                content=ft.Column([
-                    ft.Row([tf_fecha, dd_unidad]),
-                    ft.Row([dd_tipo, tf_otro_tipo]), 
-                    ft.Row([tf_tecnico, tf_monto]),
-                    tf_descripcion
-                ], tight=True)
-            ),
-            actions=[
-                ft.Button("Cancelar", on_click=cerrar),
-                ft.Button("Guardar Registro", on_click=guardar, bgcolor="#1976d2", color="white"),
-            ],
-            actions_alignment=ft.MainAxisAlignment.END,
+class MantenimientoView(ft.Container):
+    def __init__(self):
+        super().__init__()
+        self.expand = True
+        self.historial_completo = []
+        
+        # --- Banner de Diagnóstico Visual ---
+        self.banner_error = ft.Text(value="", color="red", size=14, weight=ft.FontWeight.BOLD)
+        
+        # --- Componentes Principales de la Vista ---
+        self.txt_buscar = ft.TextField(
+            hint_text="Buscar por placa, tipo o técnico...",
+            prefix_icon=ft.Icons.SEARCH,
+            on_change=self.filtrar_mantenimientos,
+            expand=True,
+            border_radius=8
         )
         
-        e.page.overlay.append(modal)
-        modal.open = True
+        self.tabla_datos = ft.DataTable(
+            columns=[
+                ft.DataColumn(ft.Text("Fecha", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(ft.Text("Unidad", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(ft.Text("Tipo Servicio", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(ft.Text("Técnico", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(ft.Text("Costo", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(ft.Text("Acciones", weight=ft.FontWeight.BOLD)),
+            ],
+            rows=[]
+        )
+
+        # --- Componentes del Formulario ---
+        self.dd_categoria = ft.Dropdown(label="Tipo de Servicio", expand=True, options=[])
+        
+        self.dd_unidad_especifica = ft.Dropdown(
+            label="Seleccionar Camión (Placa)", 
+            expand=True, 
+            options=[]
+        )
+
+        self.txt_tecnico = ft.TextField(label="Técnico Responsable", expand=True)
+        self.txt_costo = ft.TextField(label="Costo del Servicio ($)", value="0.00", expand=True)
+        self.txt_descripcion = ft.TextField(label="Descripción del Trabajo", multiline=True, min_lines=2, expand=True)
+
+        # --- Botones del Modal ---
+        self.btn_cancelar = ft.TextButton(
+            content=ft.Text("Cancelar"), 
+            on_click=self.cerrar_modal
+        )
+
+        self.btn_guardar = ft.ElevatedButton(
+            content=ft.Text("Guardar Servicio"), 
+            bgcolor="blue", 
+            color="white", 
+            on_click=self.guardar_servicio_click
+        )
+
+        # --- Estructura del Modal ---
+        self.modal_registro = ft.AlertDialog(
+            title=ft.Text("Registrar Nuevo Servicio de Taller"),
+            content=ft.Container(
+                content=ft.Column([
+                    ft.Row([self.dd_categoria]),
+                    ft.Row([self.dd_unidad_especifica, self.txt_tecnico]),
+                    ft.Row([self.txt_costo]),
+                    ft.Row([self.txt_descripcion]),
+                    ft.Container(height=10),
+                    ft.Row([self.btn_cancelar, self.btn_guardar], alignment=ft.MainAxisAlignment.END, spacing=10)
+                ], tight=True, spacing=15),
+                width=500
+            )
+        )
+
+        self.content = self.inicializar_vista()
+
+    def inicializar_vista(self):
+        btn_registrar = ft.ElevatedButton(
+            content=ft.Text("Registrar Servicio"), 
+            on_click=self.abrir_modal
+        )
+
+        self.cargar_datos_tabla()
+
+        return ft.Column([
+            ft.Text("Mantenimiento y Taller", size=28, weight=ft.FontWeight.BOLD),
+            self.banner_error,  
+            ft.Container(height=10),
+            ft.Row([self.txt_buscar, btn_registrar], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+            ft.Container(height=15),
+            ft.Container(
+                content=ft.ListView([self.tabla_datos], expand=True),
+                expand=True
+            )
+        ], expand=True)
+
+    def cargar_datos_tabla(self, page_context=None):
+        try:
+            self.historial_completo = obtener_historial_mantenimiento()
+            self.tabla_datos.rows.clear()
+            
+            # Traemos la lista de camiones para cruzar nombres en caso de que la relación falle
+            lista_camiones = obtener_camiones()
+            camiones_dict = {c.id_camion: f"{c.marca} ({c.placa})" for c in lista_camiones} if lista_camiones else {}
+            
+            for m in self.historial_completo:
+                # SOLUCIÓN AL TRANSPORTE DE DATOS: Verificación exhaustiva de la procedencia del camión
+                if hasattr(m, 'camion') and m.camion:
+                    unidad_texto = f"{m.camion.marca or 'Camión'} ({m.camion.placa})"
+                elif hasattr(m, 'id_camion') and m.id_camion in camiones_dict:
+                    unidad_texto = camiones_dict[m.id_camion]
+                elif hasattr(m, 'id_camion') and m.id_camion:
+                    unidad_texto = f"Camión #{m.id_camion}"
+                else:
+                    unidad_texto = "Unidad General"
+
+                fecha_str = m.fecha_servicio.strftime("%d/%m/%Y") if hasattr(m, 'fecha_servicio') and m.fecha_servicio else "S/F"
+                nombre_servicio = m.tipo.nombre_tipo if hasattr(m, 'tipo') and m.tipo else "General"
+                costo_invertido = m.monto_invertido if hasattr(m, 'monto_invertido') else 0.0
+
+                self.tabla_datos.rows.append(
+                    ft.DataRow(
+                        cells=[
+                            ft.DataCell(ft.Text(fecha_str)),
+                            ft.DataCell(ft.Text(unidad_texto, weight=ft.FontWeight.BOLD)),
+                            ft.DataCell(ft.Text(nombre_servicio)),
+                            ft.DataCell(ft.Text(m.tecnico_responsable or "N/A")),
+                            ft.DataCell(ft.Text(f"${costo_invertido:,.2f}", color="red", weight=ft.FontWeight.BOLD)),
+                            ft.DataCell(
+                                ft.Row([
+                                    ft.IconButton(icon=ft.Icons.EDIT, icon_color="blue", tooltip="Editar registro")
+                                ])
+                            )
+                        ]
+                    )
+                )
+            self.banner_error.value = "" 
+            if page_context:
+                page_context.update()
+        except Exception as ex:
+            print(f"[-] Error en cargar_datos_tabla: {ex}")
+            self.banner_error.value = f"⚠️ Nota: Historial vacío o error de lectura BD."
+            if page_context:
+                page_context.update()
+
+    def filtrar_mantenimientos(self, e):
+        termino = self.txt_buscar.value.lower()
+        self.cargar_datos_tabla(e.page)
+        
+        if not termino:
+            e.page.update()
+            return
+
+        filas_filtradas = []
+        for row in self.tabla_datos.rows:
+            unidad = row.cells[1].content.value.lower()
+            tipo = row.cells[2].content.value.lower()
+            tecnico = row.cells[3].content.value.lower()
+            
+            if termino in unidad or termino in tipo or termino in tecnico:
+                filas_filtradas.append(row)
+                
+        self.tabla_datos.rows = filas_filtradas
         e.page.update()
 
-    # ==========================================
-    # 3. CONSTRUCCIÓN DE LA TABLA
-    # ==========================================
-    filas_tabla = []
-    for d in datos_historial:
-        filas_tabla.append(
-            ft.DataRow(cells=[
-                ft.DataCell(ft.Text(d["fecha"])),
-                ft.DataCell(ft.Text(d["unidad"], weight=ft.FontWeight.BOLD)),
-                ft.DataCell(ft.Text(d["tipo"])),
-                ft.DataCell(ft.Text(d["tecnico"])),
-                ft.DataCell(ft.Text(d["monto"], color="red")),
-                ft.DataCell(ft.Row([
-                    ft.IconButton(icon=ft.Icons.EDIT_OUTLINED, icon_color="blue", tooltip="Ver Detalles"),
-                ])),
-            ])
-        )
+    def abrir_modal(self, e):
+        try:
+            self.banner_error.value = ""
+            
+            tipos = obtener_tipos_mantenimiento()
+            if not tipos:
+                self.dd_categoria.options = [
+                    ft.dropdown.Option(key="1", text="Mantenimiento Preventivo"),
+                    ft.dropdown.Option(key="2", text="Mantenimiento Correctivo"),
+                    ft.dropdown.Option(key="3", text="Mantenimiento General")
+                ]
+            else:
+                self.dd_categoria.options = [
+                    ft.dropdown.Option(key=str(t.id_tipo), text=t.nombre_tipo) 
+                    for t in tipos
+                ]
 
-    tabla_servicios = ft.DataTable(
-        columns=[
-            ft.DataColumn(label=ft.Text("Fecha", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(label=ft.Text("Unidad", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(label=ft.Text("Tipo Servicio", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(label=ft.Text("Técnico", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(label=ft.Text("Costo", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(label=ft.Text("Acciones", weight=ft.FontWeight.BOLD)),
-        ], rows=filas_tabla
-    )
+            self.dd_unidad_especifica.value = None
+            self.dd_unidad_especifica.options.clear()
+            
+            lista_camiones = obtener_camiones()
+            if not lista_camiones:
+                self.dd_unidad_especifica.options.append(
+                    ft.dropdown.Option(key="1", text="Mercedez - ABCDE67")
+                )
+            else:
+                for c in lista_camiones:
+                    self.dd_unidad_especifica.options.append(
+                        ft.dropdown.Option(key=str(c.id_camion), text=f"{c.marca} - {c.placa}")
+                    )
+            
+            if self.dd_unidad_especifica.options:
+                self.dd_unidad_especifica.value = self.dd_unidad_especifica.options[0].key
 
-    # ==========================================
-    # 4. ENSAMBLAJE FINAL (Simétrico a MaestrosView)
-    # ==========================================
-    return ft.Container(
-        padding=20,
-        expand=True,
-        content=ft.Column(
-            expand=True,
-            controls=[
-                ft.Text("Mantenimiento y Taller", size=28, weight=ft.FontWeight.BOLD, color="black87"),
-                ft.Divider(height=20, color="transparent"),
-
-                # Barra de búsqueda y botón de agregar (Sin dense, idéntico a Maestros)
-                ft.Row([
-                    ft.TextField(hint_text="Buscar por placa, tipo o técnico...", prefix_icon=ft.Icons.SEARCH, expand=True),
-                    ft.Button("Registrar Servicio", icon=ft.Icons.ADD, bgcolor="#1976d2", color="white", on_click=abrir_modal_servicio)
-                ]),
+            e.page.dialog = self.modal_registro
+            self.modal_registro.open = True
+            
+            if hasattr(e.page, "overlay") and self.modal_registro not in e.page.overlay:
+                e.page.overlay.append(self.modal_registro)
                 
-                # Tabla
-                ft.Row([tabla_servicios], scroll=ft.ScrollMode.AUTO)
-            ]
-        )
-    )
+            e.page.update()
+        except Exception as ex:
+            print(f"[-] Error en abrir_modal: {ex}")
+            self.banner_error.value = f"⚠️ Error al abrir el formulario: {str(ex)}"
+            e.page.update()
+
+    def cerrar_modal(self, e=None):
+        if e:
+            self.modal_registro.open = False
+            e.page.update()
+
+    def guardar_servicio_click(self, e):
+        if not self.dd_categoria.value or not self.dd_unidad_especifica.value:
+            self.banner_error.value = "⚠️ Por favor selecciona el tipo de servicio y el camión."
+            e.page.update()
+            return
+
+        try:
+            id_camion = int(self.dd_unidad_especifica.value)
+
+            exito, msg = registrar_mantenimiento(
+                id_tipo=int(self.dd_categoria.value),
+                descripcion=self.txt_descripcion.value,
+                monto=float(self.txt_costo.value or 0),
+                tecnico=self.txt_tecnico.value,
+                id_camion=id_camion,
+                id_remolque=None
+            )
+
+            if exito:
+                self.modal_registro.open = False  
+                
+                # Reseteamos campos del formulario
+                self.txt_tecnico.value = ""
+                self.txt_costo.value = "0.00"
+                self.txt_descripcion.value = ""
+                self.dd_unidad_especifica.value = None
+                self.dd_categoria.value = None
+                self.banner_error.value = ""
+                
+                # Forzamos la recarga inmediata de la tabla antes de renderizar la página principal
+                self.cargar_datos_tabla(e.page)   
+            else:
+                self.banner_error.value = f"❌ {msg}"
+                
+            e.page.update()
+        except Exception as ex:
+            print(f"[-] Error crítico en guardar_servicio_click: {ex}")
+            self.banner_error.value = f"⚠️ Error al guardar en BD: {str(ex)}"
+            e.page.update()

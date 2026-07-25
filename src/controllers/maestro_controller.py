@@ -1,6 +1,6 @@
 from database.config import SessionLocal
 from models.maestros import Chofer, Camion, Cliente, Ruta, TipoMantenimiento, Remolque
-from models.operaciones import Mantenimiento
+from models.operaciones import Mantenimiento, Nomina
 from sqlalchemy.orm import joinedload
 from decimal import Decimal
 import datetime
@@ -181,7 +181,7 @@ def actualizar_ruta(id_ruta, descripcion, costo):
         ruta = db.query(Ruta).filter(Ruta.id_ruta == id_ruta).first()
         if not ruta: return False, "No encontrado."
         ruta.descripcion_trayecto = descripcion
-        ruta.costo_unitario_sugerido = Decimal(costo) if costo else Decimal("0.00") # type: ignore
+        ruta.costo_unitario_sugerido = Decimal(costo) if costo else Decimal("0.00")
         db.commit()
         return True, "Ruta actualizada."
     except Exception as e:
@@ -283,5 +283,120 @@ def obtener_historial_mantenimiento():
     except Exception as e:
         print(f"Error al obtener historial: {e}")
         return []
+    finally:
+        db.close()
+
+def actualizar_mantenimiento(id_mantenimiento, id_tipo, descripcion, monto, tecnico, id_camion=None, id_remolque=None):
+    db = SessionLocal()
+    try:
+        registro = db.query(Mantenimiento).filter(Mantenimiento.id_mantenimiento == id_mantenimiento).first()
+        if not registro:
+            return False, "Registro de mantenimiento no encontrado."
+        
+        registro.id_tipo = id_tipo
+        registro.descripcion_trabajo = descripcion
+        registro.monto_invertido = Decimal(str(monto or 0))
+        registro.tecnico_responsable = tecnico
+        registro.id_camion = id_camion if id_camion else None
+        registro.id_remolque = id_remolque if id_remolque else None
+        
+        db.commit()
+        return True, "Orden de mantenimiento actualizada correctamente."
+    except Exception as e:
+        db.rollback()
+        return False, f"Error al actualizar: {str(e)}"
+    finally:
+        db.close()
+
+def eliminar_mantenimiento(id_mantenimiento):
+    db = SessionLocal()
+    try:
+        registro = db.query(Mantenimiento).filter(Mantenimiento.id_mantenimiento == id_mantenimiento).first()
+        if registro:
+            db.delete(registro)
+            db.commit()
+            return True, "Registro de mantenimiento eliminado correctamente."
+        return False, "Registro de mantenimiento no encontrado."
+    except Exception as e:
+        db.rollback()
+        return False, f"Error al eliminar: {str(e)}"
+    finally:
+        db.close()
+
+
+# ==========================================
+# 7. NÓMINAS Y FINANZAS (NUEVAS FUNCIONES)
+# ==========================================
+def parse_date(date_str):
+    """Convierte un string YYYY-MM-DD a objeto Date"""
+    if not date_str: return None
+    return datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+
+def obtener_nominas():
+    db = SessionLocal()
+    try:
+        return db.query(Nomina).options(joinedload(Nomina.chofer)).order_by(Nomina.fecha_emision.desc()).all()
+    except Exception as e:
+        print(f"Error al obtener nóminas: {e}")
+        return []
+    finally:
+        db.close()
+
+def registrar_nomina(id_chofer, fecha_emision, periodo_desde, periodo_hasta, ingresos, gasoil, comision):
+    db = SessionLocal()
+    try:
+        nueva_nomina = Nomina(
+            id_chofer=id_chofer,
+            fecha_emision=parse_date(fecha_emision),
+            periodo_desde=parse_date(periodo_desde),
+            periodo_hasta=parse_date(periodo_hasta),
+            total_ingresos_fletes=Decimal(str(ingresos or 0)),
+            total_costo_gasoil=Decimal(str(gasoil or 0)),
+            monto_neto_comision=Decimal(str(comision or 0))
+        )
+        db.add(nueva_nomina)
+        db.commit()
+        return True, "Nómina registrada correctamente."
+    except Exception as e:
+        db.rollback()
+        return False, f"Error al registrar: {str(e)}"
+    finally:
+        db.close()
+
+def actualizar_nomina(id_nomina, id_chofer, fecha_emision, periodo_desde, periodo_hasta, ingresos, gasoil, comision):
+    db = SessionLocal()
+    try:
+        nomina = db.query(Nomina).filter(Nomina.id_nomina == id_nomina).first()
+        if not nomina:
+            return False, "Nómina no encontrada."
+        
+        nomina.id_chofer = id_chofer
+        nomina.fecha_emision = parse_date(fecha_emision)
+        nomina.periodo_desde = parse_date(periodo_desde)
+        nomina.periodo_hasta = parse_date(periodo_hasta)
+        nomina.total_ingresos_fletes = Decimal(str(ingresos or 0))
+        nomina.total_costo_gasoil = Decimal(str(gasoil or 0))
+        nomina.monto_neto_comision = Decimal(str(comision or 0))
+        
+        db.commit()
+        return True, "Nómina actualizada correctamente."
+    except Exception as e:
+        db.rollback()
+        return False, f"Error al actualizar: {str(e)}"
+    finally:
+        db.close()
+
+def eliminar_nomina(id_nomina):
+    db = SessionLocal()
+    try:
+        nomina = db.query(Nomina).filter(Nomina.id_nomina == id_nomina).first()
+        if nomina:
+            db.delete(nomina)
+            db.commit()
+            return True, "Nómina eliminada correctamente."
+        return False, "Nómina no encontrada."
+    except Exception as e:
+        db.rollback()
+        return False, f"Error al eliminar: {str(e)}"
     finally:
         db.close()

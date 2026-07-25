@@ -1,6 +1,6 @@
 from database.config import SessionLocal
 from models.maestros import Chofer, Camion, Cliente, Ruta, TipoMantenimiento, Remolque
-from models.operaciones import Mantenimiento, Nomina
+from models.operaciones import Mantenimiento, Nomina, Viaje
 from sqlalchemy.orm import joinedload
 from decimal import Decimal
 import datetime
@@ -325,10 +325,9 @@ def eliminar_mantenimiento(id_mantenimiento):
 
 
 # ==========================================
-# 7. NÓMINAS Y FINANZAS (NUEVAS FUNCIONES)
+# 6. NÓMINAS Y FINANZAS
 # ==========================================
 def parse_date(date_str):
-    """Convierte un string YYYY-MM-DD a objeto Date"""
     if not date_str: return None
     return datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
 
@@ -398,5 +397,40 @@ def eliminar_nomina(id_nomina):
     except Exception as e:
         db.rollback()
         return False, f"Error al eliminar: {str(e)}"
+    finally:
+        db.close()
+
+
+# ==========================================
+# 7. VIAJES (FLETES)
+# ==========================================
+def registrar_flete(id_cliente, id_ruta, id_chofer, id_camion, id_remolque, estatus, gasoil, mora, costo_unitario):
+    db = SessionLocal()
+    try:
+        litros = Decimal(str(gasoil or 0))
+        costo_unit = Decimal(str(costo_unitario or 0))
+        
+        nuevo_viaje = Viaje(
+            fecha_operacion=datetime.date.today(),
+            id_chofer=int(id_chofer) if id_chofer and id_chofer != "0" else None,
+            id_camion=int(id_camion) if id_camion else None,
+            id_remolque=int(id_remolque) if id_remolque and id_remolque != "none" else None,
+            id_cliente=int(id_cliente) if id_cliente else None,
+            id_ruta=int(id_ruta) if id_ruta else None,
+            cantidad_fletes=1,
+            costo_unitario_aplicado=costo_unit,
+            monto_mora_espera=Decimal(str(mora or 0)),
+            litros_gasoil_consumido=litros,
+            precio_litro_gasoil=Decimal("0.00"),
+            costo_total_gasoil=Decimal("0.00"),
+            estatus_pago_cliente=estatus,
+            id_nomina_pago=None
+        )
+        db.add(nuevo_viaje)
+        db.commit()
+        return True, "Viaje registrado correctamente en el sistema."
+    except Exception as e:
+        db.rollback()
+        return False, f"Error al registrar viaje: {str(e)}"
     finally:
         db.close()

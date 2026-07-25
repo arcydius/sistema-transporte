@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, Numeric, ForeignKey, Enum, Text
+from sqlalchemy import Column, Integer, String, Date, Numeric, ForeignKey, Text, Enum
 from sqlalchemy.orm import relationship
 from database.config import Base
 
@@ -14,13 +14,35 @@ class Nomina(Base):
     total_costo_gasoil = Column(Numeric(7, 2))
     monto_neto_comision = Column(Numeric(7, 2))
 
-    # Relación para el joinedload en el controlador
     chofer = relationship("Chofer")
 
 class Viaje(Base):
     __tablename__ = "viajes"
+    
     id_viaje = Column(Integer, primary_key=True, autoincrement=True)
-    # Puedes agregar los campos de viajes aquí cuando los necesites
+    fecha_operacion = Column(Date)
+    id_chofer = Column(Integer, ForeignKey("choferes.id_chofer"), nullable=True)
+    id_camion = Column(Integer, ForeignKey("camiones.id_camion"), nullable=False)
+    id_remolque = Column(Integer, ForeignKey("remolques.id_remolque"), nullable=True)
+    id_cliente = Column(Integer, ForeignKey("clientes.id_cliente"), nullable=False)
+    id_ruta = Column(Integer, ForeignKey("rutas.id_ruta"), nullable=False)
+    cantidad_fletes = Column(Integer, default=1)
+    costo_unitario_aplicado = Column(Numeric(7, 2))
+    monto_mora_espera = Column(Numeric(7, 2))
+    litros_gasoil_consumido = Column(Numeric(7, 2))
+    precio_litro_gasoil = Column(Numeric(7, 2))
+    costo_total_gasoil = Column(Numeric(7, 2))
+    
+    # Se corrige el tipo para enlazarse correctamente con el ENUM de PostgreSQL
+    estatus_pago_cliente = Column(Enum("Pendiente", "Pagado", name="estatus_pago", create_type=False))
+    
+    id_nomina_pago = Column(Integer, nullable=True)
+
+    chofer = relationship("Chofer")
+    camion = relationship("Camion")
+    remolque = relationship("Remolque")
+    cliente = relationship("Cliente")
+    ruta = relationship("Ruta")
 
 class Mantenimiento(Base):
     __tablename__ = "mantenimientos"
@@ -35,7 +57,6 @@ class Mantenimiento(Base):
     id_camion = Column(Integer, ForeignKey("camiones.id_camion"), nullable=True)
     id_remolque = Column(Integer, ForeignKey("remolques.id_remolque"), nullable=True)
 
-    # Relaciones necesarias para el joinedload
     camion = relationship("Camion")
     remolque = relationship("Remolque")
     tipo = relationship("TipoMantenimiento")

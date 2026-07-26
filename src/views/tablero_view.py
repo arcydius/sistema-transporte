@@ -17,10 +17,10 @@ class TableroView(ft.Container):
         # --- Tabla de Alertas ---
         self.tabla_alertas = ft.DataTable(
             columns=[
-                ft.DataColumn(ft.Text("Unidad / Placa", weight=ft.FontWeight.BOLD)),
-                ft.DataColumn(ft.Text("Tipo de Servicio / Alerta", weight=ft.FontWeight.BOLD)),
-                ft.DataColumn(ft.Text("Estado", weight=ft.FontWeight.BOLD)),
-                ft.DataColumn(ft.Text("Observaciones", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(label=ft.Text("Unidad / Placa", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(label=ft.Text("Tipo de Servicio / Alerta", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(label=ft.Text("Estado", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(label=ft.Text("Observaciones", weight=ft.FontWeight.BOLD)),
             ],
             rows=[]
         )
@@ -67,7 +67,7 @@ class TableroView(ft.Container):
             ),
         ], spacing=15)
 
-        btn_actualizar = ft.ElevatedButton(
+        btn_actualizar = ft.Button(
             content=ft.Text("Actualizar Tablero"),
             icon=ft.Icons.REFRESH,
             on_click=self.actualizar_click

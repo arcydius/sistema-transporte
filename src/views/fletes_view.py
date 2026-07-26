@@ -41,9 +41,8 @@ class FletesView(ft.Container):
         
         self.cliente_dd = ft.Dropdown(label="Cliente Solicitante", options=[], expand=1, dense=True, content_padding=padding_uniforme)
         
-        # Dropdown de Ruta (asignando on_change fuera del constructor para evitar conflictos de versión)
-        self.ruta_dd = ft.Dropdown(label="Ruta Ejecutada", options=[], expand=2, dense=True, content_padding=padding_uniforme)
-        self.ruta_dd.on_change = self.recalcular_total
+        # Dropdown de Ruta
+        self.ruta_dd = ft.Dropdown(label="Ruta Ejecutada", options=[], expand=2, dense=True, content_padding=padding_uniforme, on_select=self.recalcular_total)
 
         self.estatus_dd = ft.Dropdown(
             label="Estatus de Pago", 
@@ -146,8 +145,8 @@ class FletesView(ft.Container):
                             controls=[
                                 ft.Column([self.txt_costo_ruta, self.txt_total_flete]),
                                 ft.Row([
-                                    ft.ElevatedButton("Limpiar Formulario", icon=ft.Icons.DELETE_OUTLINE, on_click=self.limpiar_formulario),
-                                    ft.ElevatedButton("Guardar Flete", icon=ft.Icons.SAVE, bgcolor="#1976d2", color="white", on_click=self.guardar_flete_click),
+                                    ft.Button("Limpiar Formulario", icon=ft.Icons.DELETE_OUTLINE, on_click=self.limpiar_formulario),
+                                    ft.Button("Guardar Flete", icon=ft.Icons.SAVE, bgcolor="#1976d2", color="white", on_click=self.guardar_flete_click),
                                 ])
                             ]
                         )

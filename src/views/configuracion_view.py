@@ -29,7 +29,7 @@ class ConfiguracionView(ft.Container):
             expand=True
         )
         
-        self.btn_guardar_pass = ft.ElevatedButton(
+        self.btn_guardar_pass = ft.Button(
             content=ft.Text("Actualizar Contraseña"),
             bgcolor="blue",
             color="white",
@@ -37,7 +37,7 @@ class ConfiguracionView(ft.Container):
         )
         
         # --- Componentes de Respaldos ---
-        self.btn_crear_backup = ft.ElevatedButton(
+        self.btn_crear_backup = ft.Button(
             content=ft.Text("Crear Respaldo de Base de Datos"),
             icon=ft.Icons.BACKUP,
             bgcolor="green",
@@ -45,7 +45,7 @@ class ConfiguracionView(ft.Container):
             on_click=self.crear_respaldo_click
         )
         
-        self.btn_restaurar_backup = ft.ElevatedButton(
+        self.btn_restaurar_backup = ft.Button(
             content=ft.Text("Restaurar desde Respaldo"),
             icon=ft.Icons.RESTORE,
             bgcolor="orange",

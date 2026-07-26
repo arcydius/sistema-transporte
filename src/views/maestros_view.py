@@ -13,7 +13,7 @@ def MaestrosView():
     # HERRAMIENTAS GLOBALES (NOTIFICACIONES Y FILTROS)
     # ==========================================
     def mostrar_mensaje(page, texto, color="green"):
-        page.snack_bar = ft.SnackBar(ft.Text(texto, color="white"), bgcolor=color)
+        page.snack_bar = ft.SnackBar(content=ft.Text(texto, color="white"), bgcolor=color)
         page.snack_bar.open = True
         page.update()
 

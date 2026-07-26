@@ -181,7 +181,7 @@ def actualizar_ruta(id_ruta, descripcion, costo):
         ruta = db.query(Ruta).filter(Ruta.id_ruta == id_ruta).first()
         if not ruta: return False, "No encontrado."
         ruta.descripcion_trayecto = descripcion
-        ruta.costo_unitario_sugerido = Decimal(costo) if costo else Decimal("0.00")
+        ruta.costo_unitario_sugerido = Decimal(costo) if costo else Decimal("0.00")  # type: ignore
         db.commit()
         return True, "Ruta actualizada."
     except Exception as e:
@@ -251,7 +251,7 @@ def eliminar_tipo_mantenimiento(id_tipo):
         return False, f"Error: {str(e)}"
     finally: db.close()
 
-def registrar_mantenimiento(id_tipo: int, descripcion: str, monto: float, tecnico: str, id_camion: int = None, id_remolque: int = None):
+def registrar_mantenimiento(id_tipo: int, descripcion: str, monto: float, tecnico: str, id_camion: int | None = None, id_remolque: int | None = None):
     db = SessionLocal()
     try:
         nuevo = Mantenimiento(
@@ -295,10 +295,10 @@ def actualizar_mantenimiento(id_mantenimiento, id_tipo, descripcion, monto, tecn
         
         registro.id_tipo = id_tipo
         registro.descripcion_trabajo = descripcion
-        registro.monto_invertido = Decimal(str(monto or 0))
+        registro.monto_invertido = Decimal(str(monto or 0))  # type: ignore
         registro.tecnico_responsable = tecnico
-        registro.id_camion = id_camion if id_camion else None
-        registro.id_remolque = id_remolque if id_remolque else None
+        registro.id_camion = id_camion if id_camion else None  # type: ignore
+        registro.id_remolque = id_remolque if id_remolque else None  # type: ignore
         
         db.commit()
         return True, "Orden de mantenimiento actualizada correctamente."
@@ -370,12 +370,12 @@ def actualizar_nomina(id_nomina, id_chofer, fecha_emision, periodo_desde, period
             return False, "Nómina no encontrada."
         
         nomina.id_chofer = id_chofer
-        nomina.fecha_emision = parse_date(fecha_emision)
-        nomina.periodo_desde = parse_date(periodo_desde)
-        nomina.periodo_hasta = parse_date(periodo_hasta)
-        nomina.total_ingresos_fletes = Decimal(str(ingresos or 0))
-        nomina.total_costo_gasoil = Decimal(str(gasoil or 0))
-        nomina.monto_neto_comision = Decimal(str(comision or 0))
+        nomina.fecha_emision = parse_date(fecha_emision)  # type: ignore
+        nomina.periodo_desde = parse_date(periodo_desde)  # type: ignore
+        nomina.periodo_hasta = parse_date(periodo_hasta)  # type: ignore
+        nomina.total_ingresos_fletes = Decimal(str(ingresos or 0))  # type: ignore
+        nomina.total_costo_gasoil = Decimal(str(gasoil or 0))  # type: ignore
+        nomina.monto_neto_comision = Decimal(str(comision or 0))  # type: ignore
         
         db.commit()
         return True, "Nómina actualizada correctamente."

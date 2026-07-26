@@ -1,9 +1,15 @@
 import os
+import sys
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-# URL de conexión sin contraseña
-DATABASE_URL = "postgresql+psycopg://postgres:1234@localhost:5432/transporte_montenegro"
+# Asegurar que la carpeta 'src' esté en el PYTHONPATH
+sys_src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if sys_src_path not in sys.path:
+    sys.path.insert(0, sys_src_path)
+
+# URL de conexión
+DATABASE_URL = "postgresql+psycopg://postgres:admin@localhost:5432/transporte_db"
 
 engine = create_engine(DATABASE_URL, echo=False) 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -17,7 +23,7 @@ def get_db():
         db.close()
 
 # ==========================================
-# TEST DE CONEXIÓN (Puedes borrar esto luego)
+# TEST DE CONEXIÓN
 # ==========================================
 if __name__ == "__main__":
     try:

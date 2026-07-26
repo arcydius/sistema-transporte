@@ -1,5 +1,8 @@
 from sqlalchemy import Column, Integer, String
-from src.database.config import Base
+try:
+    from database.config import Base
+except ImportError:
+    from src.database.config import Base
 
 class Administrador(Base):
     __tablename__ = "administrador"

@@ -1,3 +1,9 @@
+import os
+import sys
+sys_src_path = os.path.abspath(os.path.dirname(__file__))
+if sys_src_path not in sys.path:
+    sys.path.insert(0, sys_src_path)
+
 import flet as ft
 
 # 1. Importamos nuestro componente reutilizable
@@ -32,10 +38,24 @@ def main(page: ft.Page):
         padding=20
     )
 
-    # Lógica centralizada para cambiar de pantalla
+    # Lógica centralizada para cambiar de pantalla y refrescar datos automáticamente
     def cambiar_modulo(e):
         indice = e.control.selected_index
-        area_central.content = vistas[indice]
+        vista_seleccionada = vistas[indice]
+        
+        # Invocar la actualización automática de datos de la vista destino
+        if hasattr(vista_seleccionada, 'cargar_datos_bd'):
+            try:
+                vista_seleccionada.cargar_datos_bd()
+            except Exception as ex:
+                print(f"[-] Error refrescando vista {indice}: {ex}")
+        elif hasattr(vista_seleccionada, 'cargar_opciones_choferes'):
+            try:
+                vista_seleccionada.cargar_opciones_choferes()
+            except Exception as ex:
+                print(f"[-] Error refrescando opciones choferes: {ex}")
+
+        area_central.content = vista_seleccionada
         page.update()
 
     # Instanciamos el menú y le pasamos nuestra función

@@ -1,0 +1,115 @@
+===============================================================================
+     GUÍA PASO A PASO PARA CONFIGURAR Y EJECUTAR SGTM (TRANSPORTE MONTENEGRO)
+===============================================================================
+
+Este documento contiene las instrucciones completas desde cero para instalar
+las herramientas necesarias, configurar la base de datos y ejecutar el 
+sistema de gestión de transporte.
+
+-------------------------------------------------------------------------------
+1. PRERREQUISITOS PREVIOS
+-------------------------------------------------------------------------------
+Antes de comenzar, asegúrate de tener instalado en tu equipo:
+- Python (Versión 3.10 o superior).
+- PostgreSQL (Instalado y en ejecución en el puerto local 5432).
+- Git (opcional, para clonar el repositorio).
+
+-------------------------------------------------------------------------------
+2. INSTALACIÓN DE UV (GESTOR RÁPIDO DE PAQUETES Y ENTORNO)
+-------------------------------------------------------------------------------
+'uv' es una herramienta ultrarrápida para gestionar entornos virtuales y 
+dependencias de Python sin conflictos.
+
+Abre tu terminal/consola y ejecuta el comando según tu sistema operativo:
+
+• En Windows (PowerShell como administrador o usuario normal):
+  powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+• En macOS / Linux:
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+
+• Verificación de la instalación:
+  Cierra y vuelve a abrir tu terminal, luego verifica ejecutando:
+  uv --version
+
+-------------------------------------------------------------------------------
+3. OBTENER EL PROYECTO Y NAVEGAR A LA CARPETA
+-------------------------------------------------------------------------------
+Navega a la carpeta del proyecto en tu terminal:
+
+  cd sgtm
+
+-------------------------------------------------------------------------------
+4. MANEJO DE DEPENDENCIAS CON UV (SIN ERRORES)
+-------------------------------------------------------------------------------
+'uv' lee automáticamente los archivos `pyproject.toml` y `uv.lock` del proyecto 
+para instalar exactamente las versiones requeridas de las librerías (Flet, 
+SQLAlchemy, Psycopg3, etc.) dentro de un entorno virtual aislado (.venv).
+
+1. Para crear el entorno e instalar todas las dependencias, ejecuta:
+   uv sync
+
+2. (Opcional) Activar el entorno virtual manualmente:
+   - En Windows:
+     .venv\Scripts\activate
+   - En macOS / Linux:
+     source .venv/bin/activate
+
+Nota: No es estrictamente necesario activarlo manualmente si usas 'uv run' 
+delante de tus comandos, ya que 'uv' usará automáticamente el entorno .venv.
+
+-------------------------------------------------------------------------------
+5. CONFIGURACIÓN E INICIALIZACIÓN DE LA BASE DE DATOS
+-------------------------------------------------------------------------------
+1. Abre tu gestor de PostgreSQL (pgAdmin, DBeaver o psql) y asegúrate de crear
+   la base de datos con el nombre:
+   transporte_montenegro
+
+2. Revisa la conexión en el archivo `src/database/config.py`:
+   La URL por defecto es:
+   postgresql+psycopg://postgres:1234@localhost:5432/transporte_montenegro
+
+   * Si tu usuario o contraseña de PostgreSQL es diferente a 'postgres'/'1234',
+     modifica esa línea en `src/database/config.py` con tus credenciales.
+
+3. Ejecuta el módulo encargado de crear la base de datos y sus tablas:
+   uv run python src/database/setup_db.py
+
+   Salida esperada en consola:
+   ---------------------------------------------------------------------
+   Iniciando la construccion completa de la base de datos...
+   [OK] Exito! Todas las tablas y sus relaciones fueron creadas en PostgreSQL.
+   [OK] Usuario administrador por defecto creado ('admin' / 'admin123').
+   ---------------------------------------------------------------------
+
+   * Esto creará todas las tablas (administrador, choferes, camiones, viajes, etc.) 
+     y registrará al usuario administrador inicial:
+     - Usuario: admin
+     - Clave:   admin123
+
+-------------------------------------------------------------------------------
+6. EJECUCIÓN DEL PROGRAMA (SISTEMA DE GESTIÓN)
+-------------------------------------------------------------------------------
+Una vez construida la base de datos, puedes levantar la aplicación.
+
+• Para ejecutar como aplicación de ESCRITORIO:
+  uv run flet run
+
+  (O bien: uv run flet run src/main.py)
+
+• Para ejecutar en modo WEB (Navegador):
+  uv run flet run --web
+
+-------------------------------------------------------------------------------
+7. RESOLUCIÓN DE PROBLEMAS COMUNES
+-------------------------------------------------------------------------------
+• Error "psycopg.OperationalError: could not connect to server":
+  - Verifica que el servicio de PostgreSQL esté iniciado en tu computadora.
+  - Comprueba que el usuario, contraseña y puerto en `src/database/config.py` 
+    coincidan con tu instalación local de PostgreSQL.
+
+• Error "relation does not exist":
+  - Asegúrate de haber ejecutado primero el paso 5 (`uv run python src/database/setup_db.py`).
+
+• Agregar nuevas librerías al proyecto (si deseas agregar más dependencias):
+  uv add nombre_paquete

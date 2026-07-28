@@ -18,8 +18,9 @@ class FletesView(ft.Container):
         self.banner_mensaje = ft.Text(value="", color="green", size=14, weight=ft.FontWeight.BOLD)
         
         # --- Componentes de Totales ---
-        self.txt_costo_ruta = ft.Text("Costo Ruta: $0.00", size=16, color="black54")
-        self.txt_total_flete = ft.Text("Total del Flete: $0.00", size=24, weight=ft.FontWeight.BOLD, color="#1976d2")
+        self.txt_costo_ruta = ft.Text("Costo Ruta (1 viaje): $0.00", size=14, color="black54")
+        self.txt_costo_gasoil_total = ft.Text("Costo Total Gasoil: $0.00", size=14, color="orange")
+        self.txt_total_flete = ft.Text("Total del Flete: $0.00", size=22, weight=ft.FontWeight.BOLD, color="#1976d2")
 
         padding_uniforme = ft.Padding.symmetric(vertical=10, horizontal=12)
 
@@ -41,11 +42,21 @@ class FletesView(ft.Container):
         
         self.cliente_dd = ft.Dropdown(label="Cliente Solicitante", options=[], expand=1, dense=True, content_padding=padding_uniforme)
         
+        self.cantidad_tf = ft.TextField(
+            label="Cantidad de Viajes", 
+            value="1", 
+            input_filter=ft.InputFilter(allow=True, regex_string=r"^[0-9]*$", replacement_string=""), 
+            expand=1, 
+            dense=True, 
+            content_padding=padding_uniforme,
+            on_change=self.recalcular_total
+        )
+
         # Dropdown de Ruta
         self.ruta_dd = ft.Dropdown(label="Ruta Ejecutada", options=[], expand=2, dense=True, content_padding=padding_uniforme, on_select=self.recalcular_total)
 
         self.estatus_dd = ft.Dropdown(
-            label="Estatus de Pago", 
+            label="Estatus de Pago Cliente", 
             options=[ft.dropdown.Option("Pendiente"), ft.dropdown.Option("Pagado")], 
             value="Pendiente",
             expand=1, 
@@ -61,21 +72,32 @@ class FletesView(ft.Container):
         # -- Sección 3: Datos Operativos y Financieros --
         self.gasoil_tf = ft.TextField(
             label="Gasoil Consumido (Lts)", 
-            input_filter=ft.InputFilter(regex_string=r"[0-9.]"), 
+            input_filter=ft.InputFilter(allow=True, regex_string=r"^[0-9]*\.?[0-9]*$", replacement_string=""), 
             expand=1, 
             dense=True, 
-            content_padding=padding_uniforme
+            content_padding=padding_uniforme,
+            on_change=self.recalcular_total
+        )
+
+        self.precio_gasoil_tf = ft.TextField(
+            label="Precio por Litro Gasoil ($)", 
+            value="0.50",
+            input_filter=ft.InputFilter(allow=True, regex_string=r"^[0-9]*\.?[0-9]*$", replacement_string=""), 
+            expand=1, 
+            dense=True, 
+            content_padding=padding_uniforme,
+            on_change=self.recalcular_total
         )
         
         self.mora_tf = ft.TextField(
             label="Mora / Espera ($)", 
             value="0", 
-            input_filter=ft.InputFilter(regex_string=r"[0-9.]"), 
+            input_filter=ft.InputFilter(allow=True, regex_string=r"^[0-9]*\.?[0-9]*$", replacement_string=""), 
             expand=1, 
             dense=True, 
-            content_padding=padding_uniforme
+            content_padding=padding_uniforme,
+            on_change=self.recalcular_total
         )
-        self.mora_tf.on_change = self.recalcular_total
 
         # Calendario
         self.calendario = ft.DatePicker(
@@ -95,7 +117,15 @@ class FletesView(ft.Container):
             content=ft.Column(
                 scroll=ft.ScrollMode.AUTO,
                 controls=[
-                    ft.Text("Registro de Fletes", size=28, weight=ft.FontWeight.BOLD, color="black87"),
+                    ft.Row([
+                        ft.Text("Registro de Fletes", size=28, weight=ft.FontWeight.BOLD, color="black87"),
+                        ft.IconButton(
+                            icon=ft.Icons.REFRESH,
+                            tooltip="Refrescar Listas de Choferes, Clientes, Rutas y Unidades",
+                            icon_color="#1976d2",
+                            on_click=self.refrescar_click
+                        )
+                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                     self.banner_mensaje,
                     ft.Divider(height=10, color="transparent"),
 
@@ -106,7 +136,7 @@ class FletesView(ft.Container):
                             content=ft.Column([
                                 ft.Text("1. Datos del Servicio", weight=ft.FontWeight.BOLD, color="#1976d2"),
                                 ft.Divider(),
-                                ft.Row([self.fecha_tf, self.cliente_dd]),
+                                ft.Row([self.fecha_tf, self.cliente_dd, self.cantidad_tf]),
                                 ft.Row([self.ruta_dd, self.estatus_dd]),
                             ])
                         )
@@ -131,7 +161,7 @@ class FletesView(ft.Container):
                             content=ft.Column([
                                 ft.Text("3. Datos Operativos y Financieros", weight=ft.FontWeight.BOLD, color="#1976d2"),
                                 ft.Divider(),
-                                ft.Row([self.gasoil_tf, self.mora_tf]),
+                                ft.Row([self.gasoil_tf, self.precio_gasoil_tf, self.mora_tf]),
                             ])
                         )
                     ),
@@ -143,7 +173,7 @@ class FletesView(ft.Container):
                         content=ft.Row(
                             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                             controls=[
-                                ft.Column([self.txt_costo_ruta, self.txt_total_flete]),
+                                ft.Column([self.txt_costo_ruta, self.txt_costo_gasoil_total, self.txt_total_flete]),
                                 ft.Row([
                                     ft.Button("Limpiar Formulario", icon=ft.Icons.DELETE_OUTLINE, on_click=self.limpiar_formulario),
                                     ft.Button("Guardar Flete", icon=ft.Icons.SAVE, bgcolor="#1976d2", color="white", on_click=self.guardar_flete_click),
@@ -239,24 +269,59 @@ class FletesView(ft.Container):
             self.banner_mensaje.color = "red"
             self.banner_mensaje.value = f"⚠️ Error al conectar con la base de datos: {str(ex)}"
 
-    def recalcular_total(self, e):
-        costo_ruta = 0.0
+    def refrescar_click(self, e):
+        self.cargar_datos_bd()
+        self.banner_mensaje.color = "green"
+        self.banner_mensaje.value = "✅ Listas de clientes, rutas, choferes y unidades actualizadas."
+        if hasattr(e, 'page') and e.page:
+            e.page.update()
+
+    def recalcular_total(self, e=None):
+        try:
+            cant = int(self.cantidad_tf.value) if self.cantidad_tf.value else 1
+            if cant < 1:
+                cant = 1
+        except ValueError:
+            cant = 1
+
+        costo_unitario = 0.0
         if self.ruta_dd.value:
             opcion_seleccionada = next((opt for opt in self.ruta_dd.options if opt.key == self.ruta_dd.value), None)
             if opcion_seleccionada and opcion_seleccionada.data is not None:
                 try:
-                    costo_ruta = float(opcion_seleccionada.data)
+                    costo_unitario = float(opcion_seleccionada.data)
                 except Exception:
-                    costo_ruta = 0.0
-            
-        self.txt_costo_ruta.value = f"Costo Ruta: ${costo_ruta:.2f}"
+                    costo_unitario = 0.0
 
-        mora = float(self.mora_tf.value) if self.mora_tf.value != "" else 0.0
-        total = costo_ruta + mora
-        self.txt_total_flete.value = f"Total del Flete: ${total:.2f}"
+        costo_ruta_subtotal = cant * costo_unitario
+
+        try:
+            litros = float(self.gasoil_tf.value) if self.gasoil_tf.value else 0.0
+        except ValueError:
+            litros = 0.0
+
+        try:
+            precio_l = float(self.precio_gasoil_tf.value) if self.precio_gasoil_tf.value else 0.0
+        except ValueError:
+            precio_l = 0.0
+
+        total_gasoil = litros * precio_l
+
+        try:
+            mora = float(self.mora_tf.value) if self.mora_tf.value else 0.0
+        except ValueError:
+            mora = 0.0
+
+        total_flete = costo_ruta_subtotal + mora
+
+        self.txt_costo_ruta.value = f"Costo Ruta ({cant} viaje{'s' if cant > 1 else ''}): ${costo_ruta_subtotal:.2f}"
+        self.txt_costo_gasoil_total.value = f"Costo Total Gasoil: ${total_gasoil:.2f}"
+        self.txt_total_flete.value = f"Total del Flete: ${total_flete:.2f}"
         
-        self.txt_costo_ruta.update()
-        self.txt_total_flete.update()
+        if e and hasattr(e, 'page') and e.page:
+            self.txt_costo_ruta.update()
+            self.txt_costo_gasoil_total.update()
+            self.txt_total_flete.update()
 
     def fecha_seleccionada(self, e):
         if e.control.value:
@@ -272,14 +337,17 @@ class FletesView(ft.Container):
     def limpiar_formulario(self, e):
         self.fecha_tf.value = datetime.datetime.now().strftime("%d/%m/%Y")
         self.cliente_dd.value = None
+        self.cantidad_tf.value = "1"
         self.ruta_dd.value = None
         self.estatus_dd.value = "Pendiente"
         self.chofer_dd.value = None
         self.camion_dd.value = None
         self.remolque_dd.value = None
         self.gasoil_tf.value = ""
+        self.precio_gasoil_tf.value = "0.50"
         self.mora_tf.value = "0"
-        self.txt_costo_ruta.value = "Costo Ruta: $0.00"
+        self.txt_costo_ruta.value = "Costo Ruta (1 viaje): $0.00"
+        self.txt_costo_gasoil_total.value = "Costo Total Gasoil: $0.00"
         self.txt_total_flete.value = "Total del Flete: $0.00"
         self.banner_mensaje.value = ""
         e.page.update()
@@ -309,8 +377,10 @@ class FletesView(ft.Container):
                 id_remolque=self.remolque_dd.value if self.remolque_dd.value != "none" else None,
                 estatus=self.estatus_dd.value,
                 gasoil=self.gasoil_tf.value,
+                precio_gasoil=self.precio_gasoil_tf.value,
                 mora=self.mora_tf.value,
-                costo_unitario=costo_unitario
+                costo_unitario=costo_unitario,
+                cantidad_fletes=self.cantidad_tf.value
             )
 
             if exito:

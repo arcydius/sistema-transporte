@@ -1,3 +1,9 @@
+import os
+import sys
+sys_src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if sys_src_path not in sys.path:
+    sys.path.insert(0, sys_src_path)
+
 from sqlalchemy import Column, Integer, String, Date, Numeric, ForeignKey, Text, Enum
 from sqlalchemy.orm import relationship
 from database.config import Base
@@ -10,9 +16,11 @@ class Nomina(Base):
     fecha_emision = Column(Date)
     periodo_desde = Column(Date)
     periodo_hasta = Column(Date)
-    total_ingresos_fletes = Column(Numeric(7, 2))
-    total_costo_gasoil = Column(Numeric(7, 2))
-    monto_neto_comision = Column(Numeric(7, 2))
+    total_ingresos_fletes = Column(Numeric(12, 2))
+    total_costo_gasoil = Column(Numeric(12, 2))
+    porcentaje_comision = Column(Numeric(5, 2), default=0.20)
+    monto_neto_comision = Column(Numeric(12, 2))
+    cantidad_viajes = Column(Integer, default=0)
 
     chofer = relationship("Chofer")
 
@@ -27,22 +35,23 @@ class Viaje(Base):
     id_cliente = Column(Integer, ForeignKey("clientes.id_cliente"), nullable=False)
     id_ruta = Column(Integer, ForeignKey("rutas.id_ruta"), nullable=False)
     cantidad_fletes = Column(Integer, default=1)
-    costo_unitario_aplicado = Column(Numeric(7, 2))
-    monto_mora_espera = Column(Numeric(7, 2))
-    litros_gasoil_consumido = Column(Numeric(7, 2))
-    precio_litro_gasoil = Column(Numeric(7, 2))
-    costo_total_gasoil = Column(Numeric(7, 2))
+    costo_unitario_aplicado = Column(Numeric(12, 2))
+    monto_mora_espera = Column(Numeric(12, 2))
+    litros_gasoil_consumido = Column(Numeric(12, 2))
+    precio_litro_gasoil = Column(Numeric(12, 2))
+    costo_total_gasoil = Column(Numeric(12, 2))
     
     # Se corrige el tipo para enlazarse correctamente con el ENUM de PostgreSQL
     estatus_pago_cliente = Column(Enum("Pendiente", "Pagado", name="estatus_pago", create_type=False))
     
-    id_nomina_pago = Column(Integer, nullable=True)
+    id_nomina_pago = Column(Integer, ForeignKey("nominas.id_nomina"), nullable=True)
 
     chofer = relationship("Chofer")
     camion = relationship("Camion")
     remolque = relationship("Remolque")
     cliente = relationship("Cliente")
     ruta = relationship("Ruta")
+    nomina_pago = relationship("Nomina", foreign_keys=[id_nomina_pago])
 
 class Mantenimiento(Base):
     __tablename__ = "mantenimientos"

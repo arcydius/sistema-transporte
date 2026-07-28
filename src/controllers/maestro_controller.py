@@ -56,13 +56,32 @@ def eliminar_chofer(id_chofer):
 # ==========================================
 # 2. CAMIONES Y REMOLQUES (FLOTA)
 # ==========================================
-def registrar_camion(placa, alias, marca):
+def _parse_fecha_maestro(date_val):
+    if not date_val:
+        return None
+    if isinstance(date_val, datetime.date):
+        return date_val
+    try:
+        return datetime.datetime.strptime(str(date_val).strip(), "%d/%m/%Y").date()
+    except ValueError:
+        try:
+            return datetime.datetime.strptime(str(date_val).strip(), "%Y-%m-%d").date()
+        except ValueError:
+            return None
+
+def registrar_camion(placa, alias, marca, vencimiento_rcv=None, vencimiento_trimestre=None):
     db = SessionLocal()
     try:
-        nuevo_camion = Camion(placa=placa.upper(), alias_identificador=alias, marca=marca)
+        nuevo_camion = Camion(
+            placa=placa.upper(),
+            alias_identificador=alias,
+            marca=marca,
+            vencimiento_rcv=_parse_fecha_maestro(vencimiento_rcv),
+            vencimiento_trimestre=_parse_fecha_maestro(vencimiento_trimestre)
+        )
         db.add(nuevo_camion)
         db.commit()
-        return True, "Unidad registrada."
+        return True, "Camión registrado exitosamente."
     except Exception as e:
         db.rollback()
         return False, f"Error: {str(e)}"
@@ -73,19 +92,18 @@ def obtener_camiones():
     try: return db.query(Camion).order_by(Camion.placa).all()
     finally: db.close()
 
-def obtener_remolques():
-    db = SessionLocal()
-    try: return db.query(Remolque).order_by(Remolque.placa).all()
-    finally: db.close()
-
-def actualizar_camion(id_camion, placa, alias, marca):
+def actualizar_camion(id_camion, placa, alias, marca, vencimiento_rcv=None, vencimiento_trimestre=None):
     db = SessionLocal()
     try:
         camion = db.query(Camion).filter(Camion.id_camion == id_camion).first()
         if not camion: return False, "No encontrado."
-        camion.placa, camion.alias_identificador, camion.marca = placa.upper(), alias, marca
+        camion.placa = placa.upper()
+        camion.alias_identificador = alias
+        camion.marca = marca
+        camion.vencimiento_rcv = _parse_fecha_maestro(vencimiento_rcv)
+        camion.vencimiento_trimestre = _parse_fecha_maestro(vencimiento_trimestre)
         db.commit()
-        return True, "Unidad actualizada."
+        return True, "Camión actualizado exitosamente."
     except Exception as e:
         db.rollback()
         return False, f"Error: {str(e)}"
@@ -98,8 +116,60 @@ def eliminar_camion(id_camion):
         if camion:
             db.delete(camion)
             db.commit()
-            return True, "Unidad eliminada."
-        return False, "No encontrada."
+            return True, "Camión eliminado."
+        return False, "No encontrado."
+    except Exception as e:
+        db.rollback()
+        return False, f"Error: {str(e)}"
+    finally: db.close()
+
+def obtener_remolques():
+    db = SessionLocal()
+    try: return db.query(Remolque).order_by(Remolque.placa).all()
+    finally: db.close()
+
+def registrar_remolque(placa, alias, vencimiento_rcv=None, vencimiento_trimestre=None):
+    db = SessionLocal()
+    try:
+        nuevo_remolque = Remolque(
+            placa=placa.upper(),
+            alias_identificador=alias,
+            vencimiento_rcv=_parse_fecha_maestro(vencimiento_rcv),
+            vencimiento_trimestre=_parse_fecha_maestro(vencimiento_trimestre)
+        )
+        db.add(nuevo_remolque)
+        db.commit()
+        return True, "Remolque registrado exitosamente."
+    except Exception as e:
+        db.rollback()
+        return False, f"Error: {str(e)}"
+    finally: db.close()
+
+def actualizar_remolque(id_remolque, placa, alias, vencimiento_rcv=None, vencimiento_trimestre=None):
+    db = SessionLocal()
+    try:
+        remolque = db.query(Remolque).filter(Remolque.id_remolque == id_remolque).first()
+        if not remolque: return False, "No encontrado."
+        remolque.placa = placa.upper()
+        remolque.alias_identificador = alias
+        remolque.vencimiento_rcv = _parse_fecha_maestro(vencimiento_rcv)
+        remolque.vencimiento_trimestre = _parse_fecha_maestro(vencimiento_trimestre)
+        db.commit()
+        return True, "Remolque actualizado exitosamente."
+    except Exception as e:
+        db.rollback()
+        return False, f"Error: {str(e)}"
+    finally: db.close()
+
+def eliminar_remolque(id_remolque):
+    db = SessionLocal()
+    try:
+        remolque = db.query(Remolque).filter(Remolque.id_remolque == id_remolque).first()
+        if remolque:
+            db.delete(remolque)
+            db.commit()
+            return True, "Remolque eliminado."
+        return False, "No encontrado."
     except Exception as e:
         db.rollback()
         return False, f"Error: {str(e)}"
@@ -404,10 +474,19 @@ def eliminar_nomina(id_nomina):
 # ==========================================
 # 7. VIAJES (FLETES)
 # ==========================================
-def registrar_flete(id_cliente, id_ruta, id_chofer, id_camion, id_remolque, estatus, gasoil, mora, costo_unitario):
+def registrar_flete(id_cliente, id_ruta, id_chofer, id_camion, id_remolque, estatus, gasoil, precio_gasoil, mora, costo_unitario, cantidad_fletes=1):
     db = SessionLocal()
     try:
+        try:
+            cant = int(cantidad_fletes) if cantidad_fletes else 1
+            if cant < 1:
+                cant = 1
+        except (ValueError, TypeError):
+            cant = 1
+
         litros = Decimal(str(gasoil or 0))
+        precio_litro = Decimal(str(precio_gasoil or 0))
+        costo_gasoil_total = litros * precio_litro
         costo_unit = Decimal(str(costo_unitario or 0))
         
         nuevo_viaje = Viaje(
@@ -417,12 +496,12 @@ def registrar_flete(id_cliente, id_ruta, id_chofer, id_camion, id_remolque, esta
             id_remolque=int(id_remolque) if id_remolque and id_remolque != "none" else None,
             id_cliente=int(id_cliente) if id_cliente else None,
             id_ruta=int(id_ruta) if id_ruta else None,
-            cantidad_fletes=1,
+            cantidad_fletes=cant,
             costo_unitario_aplicado=costo_unit,
             monto_mora_espera=Decimal(str(mora or 0)),
             litros_gasoil_consumido=litros,
-            precio_litro_gasoil=Decimal("0.00"),
-            costo_total_gasoil=Decimal("0.00"),
+            precio_litro_gasoil=precio_litro,
+            costo_total_gasoil=costo_gasoil_total,
             estatus_pago_cliente=estatus,
             id_nomina_pago=None
         )

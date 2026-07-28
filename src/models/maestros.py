@@ -1,3 +1,9 @@
+import os
+import sys
+sys_src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if sys_src_path not in sys.path:
+    sys.path.insert(0, sys_src_path)
+
 from sqlalchemy import Column, Integer, String, Date, Numeric
 from database.config import Base
 

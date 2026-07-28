@@ -1,12 +1,21 @@
 import flet as ft
+import datetime
 
 from controllers.maestro_controller import (
     registrar_chofer, obtener_choferes, actualizar_chofer, eliminar_chofer,
     registrar_camion, obtener_camiones, actualizar_camion, eliminar_camion,
+    registrar_remolque, obtener_remolques, actualizar_remolque, eliminar_remolque,
     registrar_cliente, obtener_clientes, actualizar_cliente, eliminar_cliente,
     registrar_ruta, obtener_rutas, actualizar_ruta, eliminar_ruta,
     registrar_tipo_mantenimiento, obtener_tipos_mantenimiento, actualizar_tipo_mantenimiento, eliminar_tipo_mantenimiento
 )
+
+def _fmt_fecha(val):
+    if not val:
+        return "N/A"
+    if isinstance(val, (datetime.date, datetime.datetime)):
+        return val.strftime("%d/%m/%Y")
+    return str(val)
 
 def MaestrosView():
     # ==========================================
@@ -17,7 +26,6 @@ def MaestrosView():
         page.snack_bar.open = True
         page.update()
 
-    # Filtros reutilizables para no repetir código
     filtro_numeros = ft.InputFilter(allow=True, regex_string=r"^[0-9]{0,12}$", replacement_string="")
     filtro_letras = ft.InputFilter(allow=True, regex_string=r"^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]*$", replacement_string="")
     filtro_placa = ft.InputFilter(allow=True, regex_string=r"^[a-zA-Z0-9]*$", replacement_string="")
@@ -58,10 +66,12 @@ def MaestrosView():
     # 1. CHOFERES
     # ==========================================
     tabla_choferes = ft.DataTable(
+        expand=True,
+        column_spacing=40,
         columns=[
             ft.DataColumn(label=ft.Text("Cédula", weight=ft.FontWeight.BOLD)),
             ft.DataColumn(label=ft.Text("Nombre Completo", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(label=ft.Text("Teléfono", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(label=ft.Text("Teléfono / Contacto", weight=ft.FontWeight.BOLD)),
             ft.DataColumn(label=ft.Text("Acciones", weight=ft.FontWeight.BOLD)),
         ], rows=[]
     )
@@ -113,16 +123,24 @@ def MaestrosView():
         )
         e.page.overlay.append(modal); modal.open = True; e.page.update()
 
-    vista_choferes = ft.Column([ft.Row([ft.TextField(hint_text="Buscar...", prefix_icon=ft.Icons.SEARCH, expand=True), ft.Button("Nuevo Chofer", icon=ft.Icons.ADD, bgcolor="#1976d2", color="white", on_click=abrir_modal_chofer)]), ft.Row([tabla_choferes], scroll=ft.ScrollMode.AUTO)])
+    vista_choferes = ft.Column([
+        ft.Row([ft.TextField(hint_text="Buscar chofer...", prefix_icon=ft.Icons.SEARCH, expand=True), ft.Button("Nuevo Chofer", icon=ft.Icons.ADD, bgcolor="#1976d2", color="white", on_click=abrir_modal_chofer)]), 
+        ft.Container(height=5),
+        ft.Container(content=ft.Row([tabla_choferes], scroll=ft.ScrollMode.AUTO, vertical_alignment=ft.CrossAxisAlignment.START), expand=True)
+    ], alignment=ft.MainAxisAlignment.START, expand=True)
 
     # ==========================================
     # 2. CAMIONES (FLOTA)
     # ==========================================
     tabla_camiones = ft.DataTable(
+        expand=True,
+        column_spacing=30,
         columns=[
             ft.DataColumn(label=ft.Text("Placa", weight=ft.FontWeight.BOLD)),
             ft.DataColumn(label=ft.Text("Alias", weight=ft.FontWeight.BOLD)),
             ft.DataColumn(label=ft.Text("Marca", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(label=ft.Text("Venc. RCV", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(label=ft.Text("Venc. Trimestre", weight=ft.FontWeight.BOLD)),
             ft.DataColumn(label=ft.Text("Acciones", weight=ft.FontWeight.BOLD)),
         ], rows=[]
     )
@@ -130,51 +148,239 @@ def MaestrosView():
     def cargar_tabla_camiones():
         tabla_camiones.rows.clear()
         for c in obtener_camiones():
+            rcv_str = _fmt_fecha(c.vencimiento_rcv)
+            trim_str = _fmt_fecha(c.vencimiento_trimestre)
             tabla_camiones.rows.append(ft.DataRow(cells=[
                 ft.DataCell(ft.Text(str(c.placa))),
-                ft.DataCell(ft.Text(str(c.alias_identificador) if str(c.alias_identificador) else "")),
-                ft.DataCell(ft.Text(str(c.marca) if str(c.marca) else "")),
+                ft.DataCell(ft.Text(str(c.alias_identificador) if str(c.alias_identificador) else "N/A")),
+                ft.DataCell(ft.Text(str(c.marca) if str(c.marca) else "N/A")),
+                ft.DataCell(ft.Text(rcv_str, color="orange" if rcv_str != "N/A" else "black54")),
+                ft.DataCell(ft.Text(trim_str, color="blue" if trim_str != "N/A" else "black54")),
                 ft.DataCell(ft.Row([
-                    ft.IconButton(icon=ft.Icons.EDIT, icon_color="blue", tooltip="Editar", on_click=lambda e, id_c=c.id_camion, p=c.placa, a=c.alias_identificador, m=c.marca: abrir_modal_camion(e, id_c, str(p), str(a) if str(a) else "", str(m) if str(m) else "")),
+                    ft.IconButton(icon=ft.Icons.EDIT, icon_color="blue", tooltip="Editar", on_click=lambda e, id_c=c.id_camion, p=c.placa, a=c.alias_identificador, m=c.marca, r=rcv_str, t=trim_str: abrir_modal_camion(e, id_c, str(p), str(a) if str(a) else "", str(m) if str(m) else "", r if r != "N/A" else "", t if t != "N/A" else "")),
                     ft.IconButton(icon=ft.Icons.DELETE_OUTLINE, icon_color="red", tooltip="Eliminar", on_click=lambda e, id_c=c.id_camion, p=c.placa: abrir_modal_eliminar(e, id_c, p, eliminar_camion, cargar_tabla_camiones)),
                 ])),
             ]))
 
-    def abrir_modal_camion(e, id_camion=None, placa="", alias="", marca=""):
+    def abrir_modal_camion(e, id_camion=None, placa="", alias="", marca="", rcv="", trimestre=""):
         tf_placa = ft.TextField(label="Placa", value=placa, hint_text="Ej: A12B34C", max_length=7, input_filter=filtro_placa)
-        tf_alias = ft.TextField(label="Alias", value=alias)
+        tf_alias = ft.TextField(label="Alias / Identificador", value=alias)
         tf_marca = ft.TextField(label="Marca", value=marca)
-        
+
+        dp_rcv = ft.DatePicker(on_change=lambda ev: _set_fecha(tf_rcv, ev))
+        dp_trimestre = ft.DatePicker(on_change=lambda ev: _set_fecha(tf_trimestre, ev))
+
+        def _set_fecha(tf_target, ev):
+            if ev.control.value:
+                tf_target.value = ev.control.value.strftime("%d/%m/%Y")
+                tf_target.update()
+
+        def abrir_dp(dp_control, ev):
+            if dp_control not in ev.page.overlay:
+                ev.page.overlay.append(dp_control)
+            dp_control.open = True
+            ev.page.update()
+
+        tf_rcv = ft.TextField(
+            label="Vencimiento RCV", 
+            value=rcv, 
+            read_only=True, 
+            hint_text="Seleccionar fecha",
+            suffix=ft.Container(
+                content=ft.Icon(ft.Icons.CALENDAR_MONTH, color="#1976d2", size=20),
+                on_click=lambda ev: abrir_dp(dp_rcv, ev),
+                margin=ft.Margin.only(right=5),
+                tooltip="Seleccionar fecha RCV"
+            )
+        )
+
+        tf_trimestre = ft.TextField(
+            label="Vencimiento Trimestre", 
+            value=trimestre, 
+            read_only=True, 
+            hint_text="Seleccionar fecha",
+            suffix=ft.Container(
+                content=ft.Icon(ft.Icons.CALENDAR_MONTH, color="#1976d2", size=20),
+                on_click=lambda ev: abrir_dp(dp_trimestre, ev),
+                margin=ft.Margin.only(right=5),
+                tooltip="Seleccionar fecha Trimestre"
+            )
+        )
+
         def cerrar(e_cerrar=None):
-            modal.open = False; e.page.update()
+            modal.open = False
+            e.page.update()
 
         def guardar(e_guardar):
             tf_placa.error = "Requerido" if not tf_placa.value else None
-            if not tf_placa.value: e.page.update(); return
+            if not tf_placa.value: 
+                e.page.update()
+                return
 
-            if id_camion: exito, msj = actualizar_camion(id_camion, tf_placa.value, tf_alias.value, tf_marca.value)
-            else: exito, msj = registrar_camion(tf_placa.value, tf_alias.value, tf_marca.value)
+            if id_camion:
+                exito, msj = actualizar_camion(id_camion, tf_placa.value, tf_alias.value, tf_marca.value, tf_rcv.value, tf_trimestre.value)
+            else:
+                exito, msj = registrar_camion(tf_placa.value, tf_alias.value, tf_marca.value, tf_rcv.value, tf_trimestre.value)
             
-            if exito: mostrar_mensaje(e.page, msj); cargar_tabla_camiones(); cerrar()
-            else: mostrar_mensaje(e.page, msj, "red") 
+            if exito:
+                mostrar_mensaje(e.page, msj)
+                cargar_tabla_camiones()
+                cerrar()
+            else:
+                mostrar_mensaje(e.page, msj, "red") 
 
         modal = ft.AlertDialog(
-            modal=True, title=ft.Text("Editar Unidad" if id_camion else "Nueva Unidad"),
-            content=ft.Column([tf_placa, tf_alias, tf_marca], tight=True),
-            actions=[ft.Button("Cancelar", on_click=cerrar), ft.Button("Actualizar" if id_camion else "Guardar", on_click=guardar, bgcolor="blue", color="white")],
+            modal=True,
+            title=ft.Text("Editar Camión" if id_camion else "Nuevo Camión"),
+            content=ft.Column([
+                tf_placa, tf_alias, tf_marca,
+                tf_rcv, tf_trimestre
+            ], tight=True),
+            actions=[
+                ft.Button("Cancelar", on_click=cerrar),
+                ft.Button("Actualizar" if id_camion else "Guardar", on_click=guardar, bgcolor="blue", color="white")
+            ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        e.page.overlay.append(modal); modal.open = True; e.page.update()
+        e.page.overlay.append(modal)
+        modal.open = True
+        e.page.update()
 
-    vista_flota = ft.Column([ft.Row([ft.TextField(hint_text="Buscar...", prefix_icon=ft.Icons.SEARCH, expand=True), ft.Button("Nueva Unidad", icon=ft.Icons.ADD, bgcolor="#1976d2", color="white", on_click=abrir_modal_camion)]), ft.Row([tabla_camiones], scroll=ft.ScrollMode.AUTO)])
+    vista_camiones = ft.Column([
+        ft.Row([ft.TextField(hint_text="Buscar camión...", prefix_icon=ft.Icons.SEARCH, expand=True), ft.Button("Nuevo Camión", icon=ft.Icons.ADD, bgcolor="#1976d2", color="white", on_click=abrir_modal_camion)]), 
+        ft.Container(height=5),
+        ft.Container(content=ft.Row([tabla_camiones], scroll=ft.ScrollMode.AUTO, vertical_alignment=ft.CrossAxisAlignment.START), expand=True)
+    ], alignment=ft.MainAxisAlignment.START, expand=True)
 
     # ==========================================
-    # 3. CLIENTES
+    # 3. REMOLQUES (FLOTA)
+    # ==========================================
+    tabla_remolques = ft.DataTable(
+        expand=True,
+        column_spacing=35,
+        columns=[
+            ft.DataColumn(label=ft.Text("Placa", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(label=ft.Text("Alias / Tipo", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(label=ft.Text("Venc. RCV", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(label=ft.Text("Venc. Trimestre", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(label=ft.Text("Acciones", weight=ft.FontWeight.BOLD)),
+        ], rows=[]
+    )
+
+    def cargar_tabla_remolques():
+        tabla_remolques.rows.clear()
+        for r in obtener_remolques():
+            rcv_str = _fmt_fecha(r.vencimiento_rcv)
+            trim_str = _fmt_fecha(r.vencimiento_trimestre)
+            tabla_remolques.rows.append(ft.DataRow(cells=[
+                ft.DataCell(ft.Text(str(r.placa))),
+                ft.DataCell(ft.Text(str(r.alias_identificador) if str(r.alias_identificador) else "N/A")),
+                ft.DataCell(ft.Text(rcv_str, color="orange" if rcv_str != "N/A" else "black54")),
+                ft.DataCell(ft.Text(trim_str, color="blue" if trim_str != "N/A" else "black54")),
+                ft.DataCell(ft.Row([
+                    ft.IconButton(icon=ft.Icons.EDIT, icon_color="blue", tooltip="Editar", on_click=lambda e, id_r=r.id_remolque, p=r.placa, a=r.alias_identificador, r_rcv=rcv_str, t_tri=trim_str: abrir_modal_remolque(e, id_r, str(p), str(a) if str(a) else "", r_rcv if r_rcv != "N/A" else "", t_tri if t_tri != "N/A" else "")),
+                    ft.IconButton(icon=ft.Icons.DELETE_OUTLINE, icon_color="red", tooltip="Eliminar", on_click=lambda e, id_r=r.id_remolque, p=r.placa: abrir_modal_eliminar(e, id_r, p, eliminar_remolque, cargar_tabla_remolques)),
+                ])),
+            ]))
+
+    def abrir_modal_remolque(e, id_remolque=None, placa="", alias="", rcv="", trimestre=""):
+        tf_placa = ft.TextField(label="Placa Remolque", value=placa, hint_text="Ej: R12B34C", max_length=7, input_filter=filtro_placa)
+        tf_alias = ft.TextField(label="Alias / Identificador", value=alias, hint_text="Ej: Batea de 3 ejes")
+
+        dp_rcv = ft.DatePicker(on_change=lambda ev: _set_fecha(tf_rcv, ev))
+        dp_trimestre = ft.DatePicker(on_change=lambda ev: _set_fecha(tf_trimestre, ev))
+
+        def _set_fecha(tf_target, ev):
+            if ev.control.value:
+                tf_target.value = ev.control.value.strftime("%d/%m/%Y")
+                tf_target.update()
+
+        def abrir_dp(dp_control, ev):
+            if dp_control not in ev.page.overlay:
+                ev.page.overlay.append(dp_control)
+            dp_control.open = True
+            ev.page.update()
+
+        tf_rcv = ft.TextField(
+            label="Vencimiento RCV", 
+            value=rcv, 
+            read_only=True, 
+            hint_text="Seleccionar fecha",
+            suffix=ft.Container(
+                content=ft.Icon(ft.Icons.CALENDAR_MONTH, color="#1976d2", size=20),
+                on_click=lambda ev: abrir_dp(dp_rcv, ev),
+                margin=ft.Margin.only(right=5),
+                tooltip="Seleccionar fecha RCV"
+            )
+        )
+
+        tf_trimestre = ft.TextField(
+            label="Vencimiento Trimestre", 
+            value=trimestre, 
+            read_only=True, 
+            hint_text="Seleccionar fecha",
+            suffix=ft.Container(
+                content=ft.Icon(ft.Icons.CALENDAR_MONTH, color="#1976d2", size=20),
+                on_click=lambda ev: abrir_dp(dp_trimestre, ev),
+                margin=ft.Margin.only(right=5),
+                tooltip="Seleccionar fecha Trimestre"
+            )
+        )
+
+        def cerrar(e_cerrar=None):
+            modal.open = False
+            e.page.update()
+
+        def guardar(e_guardar):
+            tf_placa.error = "Requerido" if not tf_placa.value else None
+            if not tf_placa.value:
+                e.page.update()
+                return
+
+            if id_remolque:
+                exito, msj = actualizar_remolque(id_remolque, tf_placa.value, tf_alias.value, tf_rcv.value, tf_trimestre.value)
+            else:
+                exito, msj = registrar_remolque(tf_placa.value, tf_alias.value, tf_rcv.value, tf_trimestre.value)
+            
+            if exito:
+                mostrar_mensaje(e.page, msj)
+                cargar_tabla_remolques()
+                cerrar()
+            else:
+                mostrar_mensaje(e.page, msj, "red") 
+
+        modal = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Editar Remolque" if id_remolque else "Nuevo Remolque"),
+            content=ft.Column([
+                tf_placa, tf_alias,
+                tf_rcv, tf_trimestre
+            ], tight=True),
+            actions=[
+                ft.Button("Cancelar", on_click=cerrar),
+                ft.Button("Actualizar" if id_remolque else "Guardar", on_click=guardar, bgcolor="blue", color="white")
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        e.page.overlay.append(modal)
+        modal.open = True
+        e.page.update()
+
+    vista_remolques = ft.Column([
+        ft.Row([ft.TextField(hint_text="Buscar remolque...", prefix_icon=ft.Icons.SEARCH, expand=True), ft.Button("Nuevo Remolque", icon=ft.Icons.ADD, bgcolor="#1976d2", color="white", on_click=abrir_modal_remolque)]), 
+        ft.Container(height=5),
+        ft.Container(content=ft.Row([tabla_remolques], scroll=ft.ScrollMode.AUTO, vertical_alignment=ft.CrossAxisAlignment.START), expand=True)
+    ], alignment=ft.MainAxisAlignment.START, expand=True)
+
+    # ==========================================
+    # 4. CLIENTES
     # ==========================================
     tabla_clientes = ft.DataTable(
+        expand=True,
+        column_spacing=50,
         columns=[
-            ft.DataColumn(label=ft.Text("Nombre Cliente", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(label=ft.Text("Contacto", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(label=ft.Text("Nombre Cliente / Empresa", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(label=ft.Text("Contacto Principal", weight=ft.FontWeight.BOLD)),
             ft.DataColumn(label=ft.Text("Acciones", weight=ft.FontWeight.BOLD)),
         ], rows=[]
     )
@@ -184,7 +390,7 @@ def MaestrosView():
         for c in obtener_clientes():
             tabla_clientes.rows.append(ft.DataRow(cells=[
                 ft.DataCell(ft.Text(str(c.nombre_cliente))),
-                ft.DataCell(ft.Text(str(c.contacto_principal) if str(c.contacto_principal) else "")),
+                ft.DataCell(ft.Text(str(c.contacto_principal) if str(c.contacto_principal) else "N/A")),
                 ft.DataCell(ft.Row([
                     ft.IconButton(icon=ft.Icons.EDIT, icon_color="blue", tooltip="Editar", on_click=lambda e, id_c=c.id_cliente, n=c.nombre_cliente, t=c.contacto_principal: abrir_modal_cliente(e, id_c, str(n), str(t) if str(t) else "")),
                     ft.IconButton(icon=ft.Icons.DELETE_OUTLINE, icon_color="red", tooltip="Eliminar", on_click=lambda e, id_c=c.id_cliente, n=c.nombre_cliente: abrir_modal_eliminar(e, id_c, n, eliminar_cliente, cargar_tabla_clientes)),
@@ -193,14 +399,17 @@ def MaestrosView():
 
     def abrir_modal_cliente(e, id_cliente=None, nombre="", contacto=""):
         tf_nombre = ft.TextField(label="Nombre / Empresa", value=nombre, input_filter=filtro_letras)
-        tf_contacto = ft.TextField(label="Teléfono", value=contacto, keyboard_type=ft.KeyboardType.NUMBER, input_filter=filtro_numeros)
+        tf_contacto = ft.TextField(label="Teléfono / Contacto", value=contacto)
         
         def cerrar(e_cerrar=None):
-            modal.open = False; e.page.update()
+            modal.open = False
+            e.page.update()
 
         def guardar(e_guardar):
             tf_nombre.error = "Requerido" if not tf_nombre.value else None
-            if not tf_nombre.value: e.page.update(); return
+            if not tf_nombre.value:
+                e.page.update()
+                return
 
             if id_cliente: exito, msj = actualizar_cliente(id_cliente, tf_nombre.value, tf_contacto.value)
             else: exito, msj = registrar_cliente(tf_nombre.value, tf_contacto.value)
@@ -216,15 +425,21 @@ def MaestrosView():
         )
         e.page.overlay.append(modal); modal.open = True; e.page.update()
 
-    vista_clientes = ft.Column([ft.Row([ft.TextField(hint_text="Buscar...", prefix_icon=ft.Icons.SEARCH, expand=True), ft.Button("Nuevo Cliente", icon=ft.Icons.ADD, bgcolor="#1976d2", color="white", on_click=abrir_modal_cliente)]), ft.Row([tabla_clientes], scroll=ft.ScrollMode.AUTO)])
+    vista_clientes = ft.Column([
+        ft.Row([ft.TextField(hint_text="Buscar cliente...", prefix_icon=ft.Icons.SEARCH, expand=True), ft.Button("Nuevo Cliente", icon=ft.Icons.ADD, bgcolor="#1976d2", color="white", on_click=abrir_modal_cliente)]), 
+        ft.Container(height=5),
+        ft.Container(content=ft.Row([tabla_clientes], scroll=ft.ScrollMode.AUTO, vertical_alignment=ft.CrossAxisAlignment.START), expand=True)
+    ], alignment=ft.MainAxisAlignment.START, expand=True)
 
     # ==========================================
-    # 4. RUTAS
+    # 5. RUTAS
     # ==========================================
     tabla_rutas = ft.DataTable(
+        expand=True,
+        column_spacing=50,
         columns=[
-            ft.DataColumn(label=ft.Text("Ruta/Trayecto", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(label=ft.Text("Costo Sugerido", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(label=ft.Text("Ruta / Trayecto", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(label=ft.Text("Costo Sugerido ($)", weight=ft.FontWeight.BOLD)),
             ft.DataColumn(label=ft.Text("Acciones", weight=ft.FontWeight.BOLD)),
         ], rows=[]
     )
@@ -234,7 +449,7 @@ def MaestrosView():
         for r in obtener_rutas():
             tabla_rutas.rows.append(ft.DataRow(cells=[
                 ft.DataCell(ft.Text(str(r.descripcion_trayecto))),
-                ft.DataCell(ft.Text(f"${r.costo_unitario_sugerido}")),
+                ft.DataCell(ft.Text(f"${float(r.costo_unitario_sugerido or 0):,.2f}")),
                 ft.DataCell(ft.Row([
                     ft.IconButton(icon=ft.Icons.EDIT, icon_color="blue", tooltip="Editar", on_click=lambda e, id_r=r.id_ruta, d=r.descripcion_trayecto, c=r.costo_unitario_sugerido: abrir_modal_ruta(e, id_r, str(d), str(c))),
                     ft.IconButton(icon=ft.Icons.DELETE_OUTLINE, icon_color="red", tooltip="Eliminar", on_click=lambda e, id_r=r.id_ruta, d=r.descripcion_trayecto: abrir_modal_eliminar(e, id_r, d, eliminar_ruta, cargar_tabla_rutas)),
@@ -266,14 +481,20 @@ def MaestrosView():
         )
         e.page.overlay.append(modal); modal.open = True; e.page.update()
 
-    vista_rutas = ft.Column([ft.Row([ft.TextField(hint_text="Buscar...", prefix_icon=ft.Icons.SEARCH, expand=True), ft.Button("Nueva Ruta", icon=ft.Icons.ADD, bgcolor="#1976d2", color="white", on_click=abrir_modal_ruta)]), ft.Row([tabla_rutas], scroll=ft.ScrollMode.AUTO)])
+    vista_rutas = ft.Column([
+        ft.Row([ft.TextField(hint_text="Buscar ruta...", prefix_icon=ft.Icons.SEARCH, expand=True), ft.Button("Nueva Ruta", icon=ft.Icons.ADD, bgcolor="#1976d2", color="white", on_click=abrir_modal_ruta)]), 
+        ft.Container(height=5),
+        ft.Container(content=ft.Row([tabla_rutas], scroll=ft.ScrollMode.AUTO, vertical_alignment=ft.CrossAxisAlignment.START), expand=True)
+    ], alignment=ft.MainAxisAlignment.START, expand=True)
 
     # ==========================================
-    # 5. TIPOS DE MANTENIMIENTO
+    # 6. TIPOS DE MANTENIMIENTO
     # ==========================================
     tabla_mantenimientos = ft.DataTable(
+        expand=True,
+        column_spacing=60,
         columns=[
-            ft.DataColumn(label=ft.Text("Tipo de Servicio", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(label=ft.Text("Tipo de Servicio / Mantenimiento", weight=ft.FontWeight.BOLD)),
             ft.DataColumn(label=ft.Text("Acciones", weight=ft.FontWeight.BOLD)),
         ], rows=[]
     )
@@ -313,20 +534,24 @@ def MaestrosView():
         )
         e.page.overlay.append(modal); modal.open = True; e.page.update()
 
-    vista_mantenimientos = ft.Column([ft.Row([ft.TextField(hint_text="Buscar...", prefix_icon=ft.Icons.SEARCH, expand=True), ft.Button("Nuevo Servicio", icon=ft.Icons.ADD, bgcolor="#1976d2", color="white", on_click=abrir_modal_mantenimiento)]), ft.Row([tabla_mantenimientos], scroll=ft.ScrollMode.AUTO)])
+    vista_mantenimientos = ft.Column([
+        ft.Row([ft.TextField(hint_text="Buscar tipo de mantenimiento...", prefix_icon=ft.Icons.SEARCH, expand=True), ft.Button("Nuevo Servicio", icon=ft.Icons.ADD, bgcolor="#1976d2", color="white", on_click=abrir_modal_mantenimiento)]), 
+        ft.Container(height=5),
+        ft.Container(content=ft.Row([tabla_mantenimientos], scroll=ft.ScrollMode.AUTO, vertical_alignment=ft.CrossAxisAlignment.START), expand=True)
+    ], alignment=ft.MainAxisAlignment.START, expand=True)
 
     # ==========================================
     # CARGA INICIAL Y ENSAMBLAJE DE PESTAÑAS
     # ==========================================
     cargar_tabla_choferes()
     cargar_tabla_camiones()
+    cargar_tabla_remolques()
     cargar_tabla_clientes()
     cargar_tabla_rutas()
     cargar_tabla_mantenimientos()
 
-    # Respetando intacta tu estructura de pestañas funcionales (con la 5ta agregada)
     pestanas_nativas = ft.Tabs(
-        length=5,
+        length=6,
         expand=True,
         content=ft.Column(
             expand=True,
@@ -335,6 +560,7 @@ def MaestrosView():
                     tabs=[
                         ft.Tab(label="Choferes", icon=ft.Icons.PEOPLE),
                         ft.Tab(label="Camiones", icon=ft.Icons.LOCAL_SHIPPING),
+                        ft.Tab(label="Remolques", icon=ft.Icons.RV_HOOKUP),
                         ft.Tab(label="Clientes", icon=ft.Icons.BUSINESS),
                         ft.Tab(label="Rutas", icon=ft.Icons.MAP),
                         ft.Tab(label="Mantenimientos", icon=ft.Icons.BUILD),
@@ -344,7 +570,8 @@ def MaestrosView():
                     expand=True,
                     controls=[
                         ft.Container(content=vista_choferes, padding=20),
-                        ft.Container(content=vista_flota, padding=20),
+                        ft.Container(content=vista_camiones, padding=20),
+                        ft.Container(content=vista_remolques, padding=20),
                         ft.Container(content=vista_clientes, padding=20),
                         ft.Container(content=vista_rutas, padding=20),
                         ft.Container(content=vista_mantenimientos, padding=20),

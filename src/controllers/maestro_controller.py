@@ -97,11 +97,11 @@ def actualizar_camion(id_camion, placa, alias, marca, vencimiento_rcv=None, venc
     try:
         camion = db.query(Camion).filter(Camion.id_camion == id_camion).first()
         if not camion: return False, "No encontrado."
-        camion.placa = placa.upper()
-        camion.alias_identificador = alias
-        camion.marca = marca
-        camion.vencimiento_rcv = _parse_fecha_maestro(vencimiento_rcv)
-        camion.vencimiento_trimestre = _parse_fecha_maestro(vencimiento_trimestre)
+        setattr(camion, 'placa', placa.upper())
+        setattr(camion, 'alias_identificador', alias)
+        setattr(camion, 'marca', marca)
+        setattr(camion, 'vencimiento_rcv', _parse_fecha_maestro(vencimiento_rcv))
+        setattr(camion, 'vencimiento_trimestre', _parse_fecha_maestro(vencimiento_trimestre))
         db.commit()
         return True, "Camión actualizado exitosamente."
     except Exception as e:
@@ -150,10 +150,10 @@ def actualizar_remolque(id_remolque, placa, alias, vencimiento_rcv=None, vencimi
     try:
         remolque = db.query(Remolque).filter(Remolque.id_remolque == id_remolque).first()
         if not remolque: return False, "No encontrado."
-        remolque.placa = placa.upper()
-        remolque.alias_identificador = alias
-        remolque.vencimiento_rcv = _parse_fecha_maestro(vencimiento_rcv)
-        remolque.vencimiento_trimestre = _parse_fecha_maestro(vencimiento_trimestre)
+        setattr(remolque, 'placa', placa.upper())
+        setattr(remolque, 'alias_identificador', alias)
+        setattr(remolque, 'vencimiento_rcv', _parse_fecha_maestro(vencimiento_rcv))
+        setattr(remolque, 'vencimiento_trimestre', _parse_fecha_maestro(vencimiento_trimestre))
         db.commit()
         return True, "Remolque actualizado exitosamente."
     except Exception as e:
@@ -474,7 +474,7 @@ def eliminar_nomina(id_nomina):
 # ==========================================
 # 7. VIAJES (FLETES)
 # ==========================================
-def registrar_flete(id_cliente, id_ruta, id_chofer, id_camion, id_remolque, estatus, gasoil, precio_gasoil, mora, costo_unitario, cantidad_fletes=1):
+def registrar_flete(id_cliente, id_ruta, id_chofer, id_camion, id_remolque, estatus, gasoil, precio_gasoil, mora, costo_unitario, cantidad_fletes: int | str = 1):
     db = SessionLocal()
     try:
         try:
@@ -511,5 +511,68 @@ def registrar_flete(id_cliente, id_ruta, id_chofer, id_camion, id_remolque, esta
     except Exception as e:
         db.rollback()
         return False, f"Error al registrar viaje: {str(e)}"
+    finally:
+        db.close()
+
+def obtener_viajes_filtrados(id_chofer=None, fecha_desde=None, fecha_hasta=None):
+    """Obtiene fletes/viajes filtrados por chofer y rango de fechas."""
+    db = SessionLocal()
+    try:
+        query = db.query(Viaje).options(
+            joinedload(Viaje.chofer),
+            joinedload(Viaje.cliente),
+            joinedload(Viaje.ruta),
+            joinedload(Viaje.camion),
+            joinedload(Viaje.remolque)
+        )
+        if id_chofer and str(id_chofer) != "all":
+            query = query.filter(Viaje.id_chofer == int(id_chofer))
+        
+        d_desde = parse_date(fecha_desde)
+        if d_desde:
+            query = query.filter(Viaje.fecha_operacion >= d_desde)
+
+        d_hasta = parse_date(fecha_hasta)
+        if d_hasta:
+            query = query.filter(Viaje.fecha_operacion <= d_hasta)
+
+        return query.order_by(Viaje.fecha_operacion.desc(), Viaje.id_viaje.desc()).all()
+    except Exception as e:
+        print(f"Error al obtener viajes filtrados: {e}")
+        return []
+    finally:
+        db.close()
+
+def actualizar_estatus_viaje(id_viaje: int, nuevo_estatus: str):
+    """Actualiza el estatus de pago del cliente para un viaje."""
+    db = SessionLocal()
+    try:
+        viaje = db.query(Viaje).filter(Viaje.id_viaje == int(id_viaje)).first()
+        if not viaje:
+            return False, "Viaje no encontrado."
+        setattr(viaje, 'estatus_pago_cliente', nuevo_estatus)
+        db.commit()
+        return True, f"Estatus del viaje #{id_viaje} actualizado a '{nuevo_estatus}'."
+    except Exception as e:
+        db.rollback()
+        return False, f"Error al actualizar estatus del viaje: {str(e)}"
+    finally:
+        db.close()
+
+def eliminar_viaje(id_viaje: int):
+    """Elimina un viaje de la base de datos si no ha sido liquidado en una nómina."""
+    db = SessionLocal()
+    try:
+        viaje = db.query(Viaje).filter(Viaje.id_viaje == int(id_viaje)).first()
+        if not viaje:
+            return False, "Viaje no encontrado."
+        if getattr(viaje, 'id_nomina_pago', None) is not None:
+            return False, "No se puede eliminar un viaje que ya fue procesado y liquidado en una nómina. Elimine la nómina correspondiente primero."
+        db.delete(viaje)
+        db.commit()
+        return True, f"Viaje #{id_viaje} eliminado correctamente."
+    except Exception as e:
+        db.rollback()
+        return False, f"Error al eliminar viaje: {str(e)}"
     finally:
         db.close()

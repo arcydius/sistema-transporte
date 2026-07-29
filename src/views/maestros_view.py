@@ -154,8 +154,8 @@ def MaestrosView():
                 ft.DataCell(ft.Text(str(c.placa))),
                 ft.DataCell(ft.Text(str(c.alias_identificador) if str(c.alias_identificador) else "N/A")),
                 ft.DataCell(ft.Text(str(c.marca) if str(c.marca) else "N/A")),
-                ft.DataCell(ft.Text(rcv_str, color="orange" if rcv_str != "N/A" else "black54")),
-                ft.DataCell(ft.Text(trim_str, color="blue" if trim_str != "N/A" else "black54")),
+                ft.DataCell(ft.Text(rcv_str)),
+                ft.DataCell(ft.Text(trim_str)),
                 ft.DataCell(ft.Row([
                     ft.IconButton(icon=ft.Icons.EDIT, icon_color="blue", tooltip="Editar", on_click=lambda e, id_c=c.id_camion, p=c.placa, a=c.alias_identificador, m=c.marca, r=rcv_str, t=trim_str: abrir_modal_camion(e, id_c, str(p), str(a) if str(a) else "", str(m) if str(m) else "", r if r != "N/A" else "", t if t != "N/A" else "")),
                     ft.IconButton(icon=ft.Icons.DELETE_OUTLINE, icon_color="red", tooltip="Eliminar", on_click=lambda e, id_c=c.id_camion, p=c.placa: abrir_modal_eliminar(e, id_c, p, eliminar_camion, cargar_tabla_camiones)),
@@ -275,8 +275,8 @@ def MaestrosView():
             tabla_remolques.rows.append(ft.DataRow(cells=[
                 ft.DataCell(ft.Text(str(r.placa))),
                 ft.DataCell(ft.Text(str(r.alias_identificador) if str(r.alias_identificador) else "N/A")),
-                ft.DataCell(ft.Text(rcv_str, color="orange" if rcv_str != "N/A" else "black54")),
-                ft.DataCell(ft.Text(trim_str, color="blue" if trim_str != "N/A" else "black54")),
+                ft.DataCell(ft.Text(rcv_str)),
+                ft.DataCell(ft.Text(trim_str)),
                 ft.DataCell(ft.Row([
                     ft.IconButton(icon=ft.Icons.EDIT, icon_color="blue", tooltip="Editar", on_click=lambda e, id_r=r.id_remolque, p=r.placa, a=r.alias_identificador, r_rcv=rcv_str, t_tri=trim_str: abrir_modal_remolque(e, id_r, str(p), str(a) if str(a) else "", r_rcv if r_rcv != "N/A" else "", t_tri if t_tri != "N/A" else "")),
                     ft.IconButton(icon=ft.Icons.DELETE_OUTLINE, icon_color="red", tooltip="Eliminar", on_click=lambda e, id_r=r.id_remolque, p=r.placa: abrir_modal_eliminar(e, id_r, p, eliminar_remolque, cargar_tabla_remolques)),

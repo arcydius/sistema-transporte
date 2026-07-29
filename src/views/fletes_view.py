@@ -6,15 +6,32 @@ from controllers.maestro_controller import (
     obtener_rutas,
     obtener_choferes,
     obtener_remolques,
-    registrar_flete
+    registrar_flete,
+    obtener_viajes_filtrados,
+    actualizar_estatus_viaje,
+    eliminar_viaje
 )
+
+def _formatear_fecha(fecha, fmt="%d/%m/%Y"):
+    if not fecha:
+        return "N/A"
+    if isinstance(fecha, str):
+        try:
+            d = datetime.datetime.strptime(fecha, "%Y-%m-%d").date()
+            return d.strftime(fmt)
+        except Exception:
+            return fecha
+    try:
+        return fecha.strftime(fmt)
+    except Exception:
+        return str(fecha)
 
 class FletesView(ft.Container):
     def __init__(self):
         super().__init__()
         self.expand = True
         
-        # --- Banner de Mensajes y Diagnóstico ---
+        # --- Banner de Mensajes ---
         self.banner_mensaje = ft.Text(value="", color="green", size=14, weight=ft.FontWeight.BOLD)
         
         # --- Componentes de Totales ---
@@ -24,11 +41,11 @@ class FletesView(ft.Container):
 
         padding_uniforme = ft.Padding.symmetric(vertical=10, horizontal=12)
 
-        # -- Sección 1: Datos del Servicio --
+        # -- Pestaña 1: Componentes de Registro --
         self.fecha_tf = ft.TextField(
             label="Fecha de Operación", 
             value=datetime.datetime.now().strftime("%d/%m/%Y"), 
-            read_only=True, 
+            read_only=True,  # type: ignore
             expand=1,
             content_padding=padding_uniforme,
             suffix=ft.Container(
@@ -52,7 +69,6 @@ class FletesView(ft.Container):
             on_change=self.recalcular_total
         )
 
-        # Dropdown de Ruta
         self.ruta_dd = ft.Dropdown(label="Ruta Ejecutada", options=[], expand=2, dense=True, content_padding=padding_uniforme, on_select=self.recalcular_total)
 
         self.estatus_dd = ft.Dropdown(
@@ -64,12 +80,10 @@ class FletesView(ft.Container):
             content_padding=padding_uniforme
         )
 
-        # -- Sección 2: Asignación de Recursos --
         self.chofer_dd = ft.Dropdown(label="Chofer Asignado", options=[], expand=1, dense=True, content_padding=padding_uniforme)
         self.camion_dd = ft.Dropdown(label="Camión", options=[], expand=1, dense=True, content_padding=padding_uniforme)
         self.remolque_dd = ft.Dropdown(label="Remolque (Opcional)", options=[], expand=1, dense=True, content_padding=padding_uniforme)
 
-        # -- Sección 3: Datos Operativos y Financieros --
         self.gasoil_tf = ft.TextField(
             label="Gasoil Consumido (Lts)", 
             input_filter=ft.InputFilter(allow=True, regex_string=r"^[0-9]*\.?[0-9]*$", replacement_string=""), 
@@ -99,7 +113,6 @@ class FletesView(ft.Container):
             on_change=self.recalcular_total
         )
 
-        # Calendario
         self.calendario = ft.DatePicker(
             on_change=self.fecha_seleccionada,
             first_date=datetime.datetime(2024, 1, 1),
@@ -107,28 +120,92 @@ class FletesView(ft.Container):
             help_text="Seleccione la fecha del flete"
         )
 
+        # -- Pestaña 2: Componentes de Historial y Filtros --
+        self.dd_filtro_chofer = ft.Dropdown(
+            label="Filtrar por Chofer",
+            expand=True,
+            options=[ft.dropdown.Option(key="all", text="Todos los Choferes")]
+        )
+
+        self.dp_desde_filtro = ft.DatePicker(on_change=self._on_fecha_desde_filtro_change)
+        self.dp_hasta_filtro = ft.DatePicker(on_change=self._on_fecha_hasta_filtro_change)
+
+        self.txt_fecha_desde_filtro = ft.TextField(label="Fecha Desde", read_only=True, expand=True)  # type: ignore
+        self.btn_picker_desde_filtro = ft.IconButton(
+            icon=ft.Icons.CALENDAR_MONTH,
+            tooltip="Seleccionar fecha desde",
+            on_click=lambda e: self.abrir_calendario_filtro(self.dp_desde_filtro, e)
+        )
+
+        self.txt_fecha_hasta_filtro = ft.TextField(label="Fecha Hasta", read_only=True, expand=True)  # type: ignore
+        self.btn_picker_hasta_filtro = ft.IconButton(
+            icon=ft.Icons.CALENDAR_MONTH,
+            tooltip="Seleccionar fecha hasta",
+            on_click=lambda e: self.abrir_calendario_filtro(self.dp_hasta_filtro, e)
+        )
+
+        self.btn_filtrar_historial = ft.Button(
+            content=ft.Text("Aplicar Filtros"),
+            icon=ft.Icons.FILTER_ALT,
+            bgcolor="#1976d2",
+            color="white",
+            on_click=self.aplicar_filtros_historial
+        )
+
+        self.btn_limpiar_filtros = ft.Button(
+            content=ft.Text("Limpiar Filtros"),
+            icon=ft.Icons.CLEAR_ALL,
+            on_click=self.limpiar_filtros_historial
+        )
+
+        self.tabla_historial_viajes = ft.DataTable(  # type: ignore
+            expand=True,
+            column_spacing=30,
+            columns=[
+                ft.DataColumn(label=ft.Text("N°", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(label=ft.Text("Fecha", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(label=ft.Text("Chofer", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(label=ft.Text("Cliente", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(label=ft.Text("Ruta", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(label=ft.Text("Cant.", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(label=ft.Text("Gasoil ($)", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(label=ft.Text("Mora ($)", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(label=ft.Text("Total ($)", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(label=ft.Text("Estatus Cliente", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(label=ft.Text("Estado Nómina", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(label=ft.Text("Acciones", weight=ft.FontWeight.BOLD)),
+            ],
+            rows=[]
+        )
+
         self.content = self.inicializar_vista()
+
+    def abrir_calendario_filtro(self, date_picker, e):
+        if e.page:
+            if date_picker not in e.page.overlay:
+                e.page.overlay.append(date_picker)
+            date_picker.open = True
+            e.page.update()
+
+    def _on_fecha_desde_filtro_change(self, e):
+        if hasattr(self.dp_desde_filtro, 'value') and self.dp_desde_filtro.value:
+            self.txt_fecha_desde_filtro.value = _formatear_fecha(self.dp_desde_filtro.value, "%Y-%m-%d")
+            self.update()
+
+    def _on_fecha_hasta_filtro_change(self, e):
+        if hasattr(self.dp_hasta_filtro, 'value') and self.dp_hasta_filtro.value:
+            self.txt_fecha_hasta_filtro.value = _formatear_fecha(self.dp_hasta_filtro.value, "%Y-%m-%d")
+            self.update()
 
     def inicializar_vista(self):
         self.cargar_datos_bd()
 
-        return ft.Container(
-            padding=20,
+        # Construcción Pestaña 1: Formulario de Registro
+        pestana_registro = ft.Container(
+            padding=15,
             content=ft.Column(
                 scroll=ft.ScrollMode.AUTO,
                 controls=[
-                    ft.Row([
-                        ft.Text("Registro de Fletes", size=28, weight=ft.FontWeight.BOLD, color="black87"),
-                        ft.IconButton(
-                            icon=ft.Icons.REFRESH,
-                            tooltip="Refrescar Listas de Choferes, Clientes, Rutas y Unidades",
-                            icon_color="#1976d2",
-                            on_click=self.refrescar_click
-                        )
-                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                    self.banner_mensaje,
-                    ft.Divider(height=10, color="transparent"),
-
                     ft.Card(
                         elevation=2,
                         content=ft.Container(
@@ -141,7 +218,6 @@ class FletesView(ft.Container):
                             ])
                         )
                     ),
-
                     ft.Card(
                         elevation=2,
                         content=ft.Container(
@@ -153,7 +229,6 @@ class FletesView(ft.Container):
                             ])
                         )
                     ),
-
                     ft.Card(
                         elevation=2,
                         content=ft.Container(
@@ -165,7 +240,6 @@ class FletesView(ft.Container):
                             ])
                         )
                     ),
-
                     ft.Container(
                         padding=20,
                         bgcolor="#e3f2fd",
@@ -184,6 +258,106 @@ class FletesView(ft.Container):
                 ]
             )
         )
+
+        # Construcción Pestaña 2: Historial y Gestión de Viajes
+        pestana_historial = ft.Container(
+            padding=15,
+            content=ft.Column([
+                ft.Row([
+                    self.dd_filtro_chofer,
+                    ft.Row([self.txt_fecha_desde_filtro, self.btn_picker_desde_filtro], expand=True),
+                    ft.Row([self.txt_fecha_hasta_filtro, self.btn_picker_hasta_filtro], expand=True),
+                ]),
+                ft.Row([self.btn_filtrar_historial, self.btn_limpiar_filtros], alignment=ft.MainAxisAlignment.END, spacing=10),
+                ft.Container(height=10),
+                ft.Container(
+                    content=ft.Row([self.tabla_historial_viajes], expand=True, scroll=ft.ScrollMode.AUTO),
+                    border=ft.Border.all(1, "#E0E0E0"),
+                    border_radius=8,
+                    padding=5,
+                    expand=True
+                )
+            ], scroll=ft.ScrollMode.AUTO, expand=True)
+        )
+
+        self.pestanas_contenido = [pestana_registro, pestana_historial]
+        self.contenedor_pestana = ft.Container(content=self.pestanas_contenido[0], expand=True)
+
+        self.icon_tab_registro = ft.Icon(ft.Icons.LOCAL_SHIPPING, color="white", size=18)
+        self.lbl_tab_registro = ft.Text("Registrar Flete", color="white", weight=ft.FontWeight.BOLD, size=14)
+
+        self.btn_tab_registro = ft.Container(
+            content=ft.Row([
+                self.icon_tab_registro,
+                self.lbl_tab_registro
+            ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
+            bgcolor="#1976d2",
+            padding=ft.Padding.symmetric(vertical=10, horizontal=20),
+            border_radius=8,
+            ink=True,
+            on_click=lambda e: self.cambiar_pestana(0, e)
+        )
+
+        self.icon_tab_historial = ft.Icon(ft.Icons.LIST_ALT, color="#555555", size=18)
+        self.lbl_tab_historial = ft.Text("Historial y Gestión de Viajes", color="#555555", weight=ft.FontWeight.BOLD, size=14)
+
+        self.btn_tab_historial = ft.Container(
+            content=ft.Row([
+                self.icon_tab_historial,
+                self.lbl_tab_historial
+            ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
+            bgcolor="#E0E0E0",
+            padding=ft.Padding.symmetric(vertical=10, horizontal=20),
+            border_radius=8,
+            ink=True,
+            on_click=lambda e: self.cambiar_pestana(1, e)
+        )
+
+        self.tabs_bar = ft.Row([self.btn_tab_registro, self.btn_tab_historial], spacing=10)
+
+        return ft.Column([
+            ft.Row([
+                ft.Text("Gestión de Fletes y Viajes", size=26, weight=ft.FontWeight.BOLD),
+                ft.IconButton(
+                    icon=ft.Icons.REFRESH,
+                    tooltip="Refrescar datos de la base de datos",
+                    icon_color="#1976d2",
+                    on_click=self.refrescar_click
+                )
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+            self.banner_mensaje,
+            ft.Container(height=5),
+            self.tabs_bar,
+            ft.Container(height=10),
+            self.contenedor_pestana
+        ], expand=True)
+
+    def cambiar_pestana(self, indice, e):
+        self.contenedor_pestana.content = self.pestanas_contenido[indice]
+
+        if indice == 0:
+            self.btn_tab_registro.bgcolor = "#1976d2"
+            self.icon_tab_registro.color = "white"
+            self.lbl_tab_registro.color = "white"
+
+            self.btn_tab_historial.bgcolor = "#E0E0E0"
+            self.icon_tab_historial.color = "#555555"
+            self.lbl_tab_historial.color = "#555555"
+        else:
+            self.btn_tab_registro.bgcolor = "#E0E0E0"
+            self.icon_tab_registro.color = "#555555"
+            self.lbl_tab_registro.color = "#555555"
+
+            self.btn_tab_historial.bgcolor = "#1976d2"
+            self.icon_tab_historial.color = "white"
+            self.lbl_tab_historial.color = "white"
+
+            self.cargar_tabla_historial_viajes(e.page if hasattr(e, 'page') else None)
+
+        if hasattr(e, 'page') and e.page:
+            e.page.update()
+        else:
+            self.update()
 
     def cargar_datos_bd(self):
         try:
@@ -225,11 +399,15 @@ class FletesView(ft.Container):
                 choferes = []
 
             self.chofer_dd.options.clear()
+            self.dd_filtro_chofer.options.clear()
+            self.dd_filtro_chofer.options.append(ft.dropdown.Option(key="all", text="Todos los Choferes"))
+
             if choferes:
                 for ch in choferes:
-                    nombre_ch = getattr(ch, 'nombre_completo', str(ch))
+                    nombre_ch = str(getattr(ch, 'nombre_completo', str(ch)))
                     id_ch = str(getattr(ch, 'id_chofer', nombre_ch))
                     self.chofer_dd.options.append(ft.dropdown.Option(key=id_ch, text=nombre_ch))
+                    self.dd_filtro_chofer.options.append(ft.dropdown.Option(key=id_ch, text=nombre_ch))
             else:
                 self.chofer_dd.options = [ft.dropdown.Option(key="0", text="Sin choferes registrados")]
 
@@ -269,10 +447,166 @@ class FletesView(ft.Container):
             self.banner_mensaje.color = "red"
             self.banner_mensaje.value = f"⚠️ Error al conectar con la base de datos: {str(ex)}"
 
+    def cargar_tabla_historial_viajes(self, page_context=None):
+        chofer_id = self.dd_filtro_chofer.value
+        f_desde = self.txt_fecha_desde_filtro.value
+        f_hasta = self.txt_fecha_hasta_filtro.value
+
+        viajes = obtener_viajes_filtrados(
+            id_chofer=chofer_id,
+            fecha_desde=f_desde,
+            fecha_hasta=f_hasta
+        )
+
+        self.tabla_historial_viajes.rows.clear()
+        if viajes:
+            for v in viajes:
+                id_v = int(getattr(v, 'id_viaje'))
+                f_op = _formatear_fecha(getattr(v, 'fecha_operacion', None), "%d/%m/%Y")
+                
+                ch_obj = getattr(v, 'chofer', None)
+                ch_name = str(getattr(ch_obj, 'nombre_completo', 'N/A')) if ch_obj else "N/A"
+                
+                cl_obj = getattr(v, 'cliente', None)
+                cl_name = str(getattr(cl_obj, 'nombre_cliente', 'N/A')) if cl_obj else "N/A"
+                
+                rt_obj = getattr(v, 'ruta', None)
+                rt_name = str(getattr(rt_obj, 'descripcion_trayecto', 'N/A')) if rt_obj else "N/A"
+
+                cant = int(getattr(v, 'cantidad_fletes', 1) or 1)
+                costo_u = float(getattr(v, 'costo_unitario_aplicado', 0.0) or 0.0)
+                mora = float(getattr(v, 'monto_mora_espera', 0.0) or 0.0)
+                gasoil_tot = float(getattr(v, 'costo_total_gasoil', 0.0) or 0.0)
+                total_flete = (cant * costo_u) + mora
+
+                estatus_cliente = str(getattr(v, 'estatus_pago_cliente', 'Pendiente'))
+                id_nomina = getattr(v, 'id_nomina_pago', None)
+                estado_nomina = f"NOM-{int(id_nomina):05d}" if id_nomina else "Pendiente"
+
+                # Color de badges
+                color_estatus = "green" if estatus_cliente.lower() == "pagado" else "orange"
+                color_nomina = "blue" if id_nomina else "grey"
+
+                self.tabla_historial_viajes.rows.append(
+                    ft.DataRow(cells=[
+                        ft.DataCell(ft.Text(f"#{id_v}", weight=ft.FontWeight.BOLD)),
+                        ft.DataCell(ft.Text(f_op)),
+                        ft.DataCell(ft.Text(ch_name, weight=ft.FontWeight.BOLD)),
+                        ft.DataCell(ft.Text(cl_name)),
+                        ft.DataCell(ft.Text(rt_name)),
+                        ft.DataCell(ft.Text(str(cant))),
+                        ft.DataCell(ft.Text(f"${gasoil_tot:,.2f}", color="orange")),
+                        ft.DataCell(ft.Text(f"${mora:,.2f}")),
+                        ft.DataCell(ft.Text(f"${total_flete:,.2f}", weight=ft.FontWeight.BOLD, color="blue")),
+                        ft.DataCell(ft.Text(estatus_cliente, color=color_estatus, weight=ft.FontWeight.BOLD)),
+                        ft.DataCell(ft.Text(estado_nomina, color=color_nomina)),
+                        ft.DataCell(
+                            ft.Row([
+                                ft.IconButton(
+                                    icon=ft.Icons.EDIT,
+                                    icon_color="blue",
+                                    tooltip="Editar Estatus de Pago Cliente",
+                                    on_click=lambda e, id_viaje=id_v, est=estatus_cliente: self.abrir_modal_editar_estatus(e, id_viaje, est)
+                                ),
+                                ft.IconButton(
+                                    icon=ft.Icons.DELETE_OUTLINE,
+                                    icon_color="red",
+                                    tooltip="Eliminar Viaje No Realizado",
+                                    on_click=lambda e, id_viaje=id_v: self.abrir_modal_eliminar_viaje(e, id_viaje)
+                                )
+                            ])
+                        )
+                    ])
+                )
+        if page_context:
+            page_context.update()
+
+    def aplicar_filtros_historial(self, e):
+        self.cargar_tabla_historial_viajes(e.page)
+
+    def limpiar_filtros_historial(self, e):
+        self.dd_filtro_chofer.value = "all"
+        self.txt_fecha_desde_filtro.value = ""
+        self.txt_fecha_hasta_filtro.value = ""
+        self.cargar_tabla_historial_viajes(e.page)
+
+    def abrir_modal_editar_estatus(self, e, id_viaje: int, estatus_actual: str):
+        dd_nuevo_estatus = ft.Dropdown(
+            label="Estatus de Pago del Cliente",
+            options=[ft.dropdown.Option("Pendiente"), ft.dropdown.Option("Pagado")],
+            value=estatus_actual if estatus_actual in ["Pendiente", "Pagado"] else "Pendiente",
+            expand=True
+        )
+
+        def cerrar(e_cerrar=None):
+            modal.open = False
+            e.page.update()
+
+        def guardar(e_guardar):
+            exito, msj = actualizar_estatus_viaje(id_viaje, dd_nuevo_estatus.value or "Pendiente")
+            if exito:
+                self.banner_mensaje.color = "green"
+                self.banner_mensaje.value = f"✅ {msj}"
+                self.cargar_tabla_historial_viajes(e.page)
+                cerrar()
+            else:
+                self.banner_mensaje.color = "red"
+                self.banner_mensaje.value = f"❌ {msj}"
+                e.page.update()
+
+        modal = ft.AlertDialog(
+            modal=True,
+            title=ft.Text(f"Editar Estatus del Viaje #{id_viaje}"),
+            content=ft.Column([
+                ft.Text(f"Modifique el estado de cobro al cliente para el viaje N° #{id_viaje}:"),
+                ft.Container(height=10),
+                dd_nuevo_estatus
+            ], tight=True, width=400),
+            actions=[
+                ft.Button("Cancelar", on_click=cerrar),
+                ft.Button("Actualizar", bgcolor="blue", color="white", on_click=guardar)
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        e.page.overlay.append(modal)
+        modal.open = True
+        e.page.update()
+
+    def abrir_modal_eliminar_viaje(self, e, id_viaje: int):
+        def cerrar(e_cerrar=None):
+            modal.open = False
+            e.page.update()
+
+        def confirmar(e_conf):
+            exito, msj = eliminar_viaje(id_viaje)
+            if exito:
+                self.banner_mensaje.color = "green"
+                self.banner_mensaje.value = f"✅ {msj}"
+                self.cargar_tabla_historial_viajes(e.page)
+            else:
+                self.banner_mensaje.color = "red"
+                self.banner_mensaje.value = f"❌ {msj}"
+            cerrar()
+
+        modal = ft.AlertDialog(
+            modal=True,
+            title=ft.Text(f"Confirmar Eliminación de Viaje #{id_viaje}", color="red"),
+            content=ft.Text(f"¿Está seguro de que desea eliminar el registro del Viaje N° #{id_viaje}?\n\nEsta acción es irreversible y removerá el flete del sistema."),
+            actions=[
+                ft.Button("Cancelar", on_click=cerrar),
+                ft.Button("Eliminar Viaje", icon=ft.Icons.DELETE_FOREVER, bgcolor="red", color="white", on_click=confirmar)
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        e.page.overlay.append(modal)
+        modal.open = True
+        e.page.update()
+
     def refrescar_click(self, e):
         self.cargar_datos_bd()
+        self.cargar_tabla_historial_viajes(e.page)
         self.banner_mensaje.color = "green"
-        self.banner_mensaje.value = "✅ Listas de clientes, rutas, choferes y unidades actualizadas."
+        self.banner_mensaje.value = "✅ Listas y datos de viajes actualizados."
         if hasattr(e, 'page') and e.page:
             e.page.update()
 
@@ -334,7 +668,20 @@ class FletesView(ft.Container):
         self.calendario.open = True
         e.page.update()
 
-    def limpiar_formulario(self, e):
+    def mostrar_mensaje(self, page, texto, color="green"):
+        if page:
+            page.snack_bar = ft.SnackBar(
+                content=ft.Row([
+                    ft.Icon(ft.Icons.CHECK_CIRCLE if color == "green" else ft.Icons.ERROR, color="white"),
+                    ft.Text(texto, color="white", weight=ft.FontWeight.BOLD)
+                ]),
+                bgcolor=color,
+                duration=4000
+            )
+            page.snack_bar.open = True
+            page.update()
+
+    def limpiar_formulario(self, e, limpiar_banner=True):
         self.fecha_tf.value = datetime.datetime.now().strftime("%d/%m/%Y")
         self.cliente_dd.value = None
         self.cantidad_tf.value = "1"
@@ -349,14 +696,17 @@ class FletesView(ft.Container):
         self.txt_costo_ruta.value = "Costo Ruta (1 viaje): $0.00"
         self.txt_costo_gasoil_total.value = "Costo Total Gasoil: $0.00"
         self.txt_total_flete.value = "Total del Flete: $0.00"
-        self.banner_mensaje.value = ""
-        e.page.update()
+        if limpiar_banner:
+            self.banner_mensaje.value = ""
+        if hasattr(e, 'page') and e.page:
+            e.page.update()
 
     def guardar_flete_click(self, e):
         if not self.cliente_dd.value or not self.ruta_dd.value or not self.camion_dd.value:
+            msj_err = "⚠️ Por favor complete los campos obligatorios (Cliente, Ruta y Camión)."
             self.banner_mensaje.color = "red"
-            self.banner_mensaje.value = "⚠️ Por favor complete los campos obligatorios (Cliente, Ruta y Camión)."
-            e.page.update()
+            self.banner_mensaje.value = msj_err
+            self.mostrar_mensaje(e.page, msj_err, "red")
             return
 
         costo_unitario = 0.0
@@ -367,6 +717,13 @@ class FletesView(ft.Container):
                     costo_unitario = float(opcion_seleccionada.data)
                 except Exception:
                     costo_unitario = 0.0
+
+        try:
+            cant_fletes = int(self.cantidad_tf.value) if self.cantidad_tf.value else 1
+            if cant_fletes < 1:
+                cant_fletes = 1
+        except (ValueError, TypeError):
+            cant_fletes = 1
 
         try:
             exito, msg = registrar_flete(
@@ -380,19 +737,27 @@ class FletesView(ft.Container):
                 precio_gasoil=self.precio_gasoil_tf.value,
                 mora=self.mora_tf.value,
                 costo_unitario=costo_unitario,
-                cantidad_fletes=self.cantidad_tf.value
+                cantidad_fletes=cant_fletes
             )
 
             if exito:
+                msj_exito = f"✅ {msg}"
                 self.banner_mensaje.color = "green"
-                self.banner_mensaje.value = f"✅ {msg}"
-                self.limpiar_formulario(e)
+                self.banner_mensaje.value = msj_exito
+                self.mostrar_mensaje(e.page, msj_exito, "green")
+                self.limpiar_formulario(e, limpiar_banner=False)
+                # Actualizar tabla de historial si está cargada
+                self.cargar_tabla_historial_viajes()
             else:
+                msj_fail = f"❌ {msg}"
                 self.banner_mensaje.color = "red"
-                self.banner_mensaje.value = f"❌ {msg}"
+                self.banner_mensaje.value = msj_fail
+                self.mostrar_mensaje(e.page, msj_fail, "red")
             e.page.update()
         except Exception as ex:
             print(f"[-] Error al guardar flete: {ex}")
+            msj_ex = f"⚠️ Error en BD: {str(ex)}"
             self.banner_mensaje.color = "red"
-            self.banner_mensaje.value = f"⚠️ Error en BD: {str(ex)}"
+            self.banner_mensaje.value = msj_ex
+            self.mostrar_mensaje(e.page, msj_ex, "red")
             e.page.update()

@@ -89,7 +89,7 @@ def registrar_usuario(username: str, password: str, nombre_completo: str):
     finally:
         db.close()
 
-def actualizar_usuario(id_admin: int, username: str, nombre_completo: str, password: str = None):
+def actualizar_usuario(id_admin: int, username: str, nombre_completo: str, password: str | None = None):
     """Actualiza los datos de un usuario existente. Opcionalmente actualiza la contraseña."""
     if not username or not nombre_completo:
         return False, "El usuario y el nombre completo son obligatorios."
@@ -190,7 +190,7 @@ def verificar_credenciales(username: str, password: str):
 # ==========================================
 # GESTIÓN DE RESPALDOS (BACKUPS)
 # ==========================================
-def obtener_directorio_backups(custom_dir: str = None) -> str:
+def obtener_directorio_backups(custom_dir: str | None = None) -> str:
     """Obtiene la ruta del directorio de respaldos, creándolo si no existe."""
     if custom_dir and os.path.exists(custom_dir):
         return custom_dir
@@ -201,7 +201,7 @@ def obtener_directorio_backups(custom_dir: str = None) -> str:
     os.makedirs(backup_dir, exist_ok=True)
     return backup_dir
 
-def crear_backup(directorio_destino: str = None):
+def crear_backup(directorio_destino: str | None = None):
     """
     Genera un respaldo de la base de datos.
     Genera un script de respaldo SQL exportando las tablas del sistema.
@@ -247,7 +247,7 @@ def crear_backup(directorio_destino: str = None):
     except Exception as e:
         return False, f"Error al generar respaldo: {str(e)}"
 
-def obtener_lista_backups(directorio_destino: str = None):
+def obtener_lista_backups(directorio_destino: str | None = None):
     """Devuelve la lista de archivos de respaldo disponibles."""
     try:
         backup_dir = obtener_directorio_backups(directorio_destino)

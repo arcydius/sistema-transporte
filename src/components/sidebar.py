@@ -1,18 +1,49 @@
 import flet as ft
 
 def MenuLateral(al_cambiar_ruta):
+    color_inactivo = "#94A3B8"  # Gris plata brillante de alto contraste
+    color_activo = "white"
+
     return ft.NavigationRail(
         selected_index=0,
         label_type=ft.NavigationRailLabelType.ALL,
-        min_width=100,
+        min_width=125,  # Ancho suficiente fijo para que 'Mantenimiento' en negrita no redimensione el sidebar
         min_extended_width=200,
-        on_change=al_cambiar_ruta, # Recibe la función que cambia las pantallas
+        bgcolor="#1E293B",  # Fondo Azul Marino Slate
+        indicator_color="#3B82F6",  # Cápsula Azul Vibrante
+        unselected_label_text_style=ft.TextStyle(color=color_inactivo, size=12),
+        selected_label_text_style=ft.TextStyle(color=color_activo, weight=ft.FontWeight.BOLD, size=12),
+        on_change=al_cambiar_ruta,
         destinations=[
-            ft.NavigationRailDestination(icon=ft.Icons.DASHBOARD_OUTLINED, selected_icon=ft.Icons.DASHBOARD, label="Tablero"),
-            ft.NavigationRailDestination(icon=ft.Icons.LOCAL_SHIPPING_OUTLINED, selected_icon=ft.Icons.LOCAL_SHIPPING, label="Fletes"),
-            ft.NavigationRailDestination(icon=ft.Icons.FOLDER_SHARED_OUTLINED, selected_icon=ft.Icons.FOLDER_SHARED, label="Maestros"),
-            ft.NavigationRailDestination(icon=ft.Icons.BUILD_OUTLINED, selected_icon=ft.Icons.BUILD, label="Mantenimiento"),
-            ft.NavigationRailDestination(icon=ft.Icons.MONETIZATION_ON_OUTLINED, selected_icon=ft.Icons.MONETIZATION_ON, label="Nómina"),
-            ft.NavigationRailDestination(icon=ft.Icons.SETTINGS_OUTLINED, selected_icon=ft.Icons.SETTINGS, label="Configuración"),
+            ft.NavigationRailDestination(
+                icon=ft.Icon(ft.Icons.DASHBOARD_OUTLINED, color=color_inactivo),
+                selected_icon=ft.Icon(ft.Icons.DASHBOARD, color=color_activo),
+                label="Tablero"
+            ),
+            ft.NavigationRailDestination(
+                icon=ft.Icon(ft.Icons.LOCAL_SHIPPING_OUTLINED, color=color_inactivo),
+                selected_icon=ft.Icon(ft.Icons.LOCAL_SHIPPING, color=color_activo),
+                label="Fletes"
+            ),
+            ft.NavigationRailDestination(
+                icon=ft.Icon(ft.Icons.FOLDER_SHARED_OUTLINED, color=color_inactivo),
+                selected_icon=ft.Icon(ft.Icons.FOLDER_SHARED, color=color_activo),
+                label="Maestros"
+            ),
+            ft.NavigationRailDestination(
+                icon=ft.Icon(ft.Icons.BUILD_OUTLINED, color=color_inactivo),
+                selected_icon=ft.Icon(ft.Icons.BUILD, color=color_activo),
+                label="Mantenimiento"
+            ),
+            ft.NavigationRailDestination(
+                icon=ft.Icon(ft.Icons.MONETIZATION_ON_OUTLINED, color=color_inactivo),
+                selected_icon=ft.Icon(ft.Icons.MONETIZATION_ON, color=color_activo),
+                label="Nómina"
+            ),
+            ft.NavigationRailDestination(
+                icon=ft.Icon(ft.Icons.SETTINGS_OUTLINED, color=color_inactivo),
+                selected_icon=ft.Icon(ft.Icons.SETTINGS, color=color_activo),
+                label="Configuración"
+            ),
         ],
     )

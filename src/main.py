@@ -20,6 +20,8 @@ from views.configuracion_view import ConfiguracionView
 def main(page: ft.Page):
     page.title = "Sistema de Gestión - Transporte Montenegro"
     page.theme_mode = ft.ThemeMode.LIGHT 
+    page.window.maximized = True
+    page.bgcolor = "#F0F4F8"  # Fondo gris slate suave que elimina el blanco deslumbrante sin modificar vistas
 
     # Agrupamos todas las vistas en una lista que coincide con el orden del menú
     vistas = [
@@ -44,7 +46,12 @@ def main(page: ft.Page):
         vista_seleccionada = vistas[indice]
         
         # Invocar la actualización automática de datos de la vista destino
-        if hasattr(vista_seleccionada, 'cargar_datos_bd'):
+        if hasattr(vista_seleccionada, 'cargar_datos_tablero'):
+            try:
+                vista_seleccionada.cargar_datos_tablero(page)
+            except Exception as ex:
+                print(f"[-] Error refrescando tablero {indice}: {ex}")
+        elif hasattr(vista_seleccionada, 'cargar_datos_bd'):
             try:
                 vista_seleccionada.cargar_datos_bd()
             except Exception as ex:
@@ -60,6 +67,11 @@ def main(page: ft.Page):
 
     # Instanciamos el menú y le pasamos nuestra función
     rail = MenuLateral(al_cambiar_ruta=cambiar_modulo)
+    contenedor_rail = ft.Container(
+        content=rail,
+        bgcolor="#1E293B",
+        width=125
+    )
     
     # Ensamblaje de la interfaz
     page.add(
@@ -67,9 +79,10 @@ def main(page: ft.Page):
             expand=True,
             content=ft.Row(
                 expand=True,
+                spacing=0,
                 controls=[
-                    ft.SelectionArea(content=rail),
-                    ft.VerticalDivider(width=1),
+                    contenedor_rail,
+                    ft.VerticalDivider(width=1, color="#334155"),
                     area_central, 
                 ],
             ),

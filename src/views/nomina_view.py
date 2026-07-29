@@ -54,14 +54,14 @@ class NominaView(ft.Container):
         self.dp_desde_registro = ft.DatePicker(on_change=self._on_fecha_desde_registro_change)
         self.dp_hasta_registro = ft.DatePicker(on_change=self._on_fecha_hasta_registro_change)
 
-        self.txt_fecha_desde_reg = ft.TextField(label="Fecha Desde", read_only=True, expand=True)
+        self.txt_fecha_desde_reg = ft.TextField(label="Fecha Desde", read_only=True, expand=True)  # type: ignore
         self.btn_picker_desde_reg = ft.IconButton(
             icon=ft.Icons.CALENDAR_MONTH,
             tooltip="Seleccionar fecha desde",
             on_click=lambda e: self.abrir_calendario(self.dp_desde_registro, e)
         )
 
-        self.txt_fecha_hasta_reg = ft.TextField(label="Fecha Hasta", read_only=True, expand=True)
+        self.txt_fecha_hasta_reg = ft.TextField(label="Fecha Hasta", read_only=True, expand=True)  # type: ignore
         self.btn_picker_hasta_reg = ft.IconButton(
             icon=ft.Icons.CALENDAR_MONTH,
             tooltip="Seleccionar fecha hasta",
@@ -99,17 +99,9 @@ class NominaView(ft.Container):
         )
 
         self.btn_guardar_pago = ft.Button(
-            content=ft.Text("Registrar Pago de Nómina"),
-            icon=ft.Icons.SAVE,
-            bgcolor="#2E7D32",
-            color="white",
-            on_click=lambda e: self.procesar_pago_click(e, generar_pdf=False)
-        )
-
-        self.btn_guardar_pdf = ft.Button(
-            content=ft.Text("Registrar e Imprimir PDF"),
+            content=ft.Text("Registrar Pago de Nómina (Generar PDF)"),
             icon=ft.Icons.PICTURE_AS_PDF,
-            bgcolor="#00838F",
+            bgcolor="#2E7D32",
             color="white",
             on_click=lambda e: self.procesar_pago_click(e, generar_pdf=True)
         )
@@ -124,13 +116,13 @@ class NominaView(ft.Container):
         self.dp_desde_filtro = ft.DatePicker(on_change=self._on_fecha_desde_filtro_change)
         self.dp_hasta_filtro = ft.DatePicker(on_change=self._on_fecha_hasta_filtro_change)
 
-        self.txt_fecha_desde_filtro = ft.TextField(label="Período Desde", read_only=True, expand=True)
+        self.txt_fecha_desde_filtro = ft.TextField(label="Período Desde", read_only=True, expand=True)  # type: ignore
         self.btn_picker_desde_filtro = ft.IconButton(
             icon=ft.Icons.CALENDAR_MONTH,
             on_click=lambda e: self.abrir_calendario(self.dp_desde_filtro, e)
         )
 
-        self.txt_fecha_hasta_filtro = ft.TextField(label="Período Hasta", read_only=True, expand=True)
+        self.txt_fecha_hasta_filtro = ft.TextField(label="Período Hasta", read_only=True, expand=True)  # type: ignore
         self.btn_picker_hasta_filtro = ft.IconButton(
             icon=ft.Icons.CALENDAR_MONTH,
             on_click=lambda e: self.abrir_calendario(self.dp_hasta_filtro, e)
@@ -240,9 +232,9 @@ class NominaView(ft.Container):
         if choferes:
             for c in choferes:
                 cid = str(c.id_chofer)
-                cname = c.nombre_completo
-                cced = getattr(c, 'cedula_identidad', '')
-                label = f"{cname} (C.I: {cced})" if cced else cname
+                cname = str(c.nombre_completo)
+                cced = str(getattr(c, 'cedula_identidad', '') or '')
+                label: str = f"{cname} (C.I: {cced})" if cced else cname
 
                 self.dd_chofer_registro.options.append(ft.dropdown.Option(key=cid, text=label))
                 self.dd_filtro_chofer.options.append(ft.dropdown.Option(key=cid, text=label))
@@ -295,7 +287,7 @@ class NominaView(ft.Container):
                     expand=True
                 ),
                 ft.Container(height=15),
-                ft.Row([self.btn_guardar_pago, self.btn_guardar_pdf], alignment=ft.MainAxisAlignment.END, spacing=15)
+                ft.Row([self.btn_guardar_pago], alignment=ft.MainAxisAlignment.END)
             ], scroll=ft.ScrollMode.AUTO, expand=True)
         )
 
@@ -323,10 +315,13 @@ class NominaView(ft.Container):
         self.pestanas_contenido = [pestana_registro, pestana_historial]
         self.contenedor_pestana = ft.Container(content=self.pestanas_contenido[0], expand=True)
 
+        self.icon_tab_registro = ft.Icon(ft.Icons.PAYMENT, color="white", size=18)
+        self.lbl_tab_registro = ft.Text("Registrar Nuevo Pago", color="white", weight=ft.FontWeight.BOLD, size=14)
+
         self.btn_tab_registro = ft.Container(
             content=ft.Row([
-                ft.Icon(ft.Icons.PAYMENT, color="white", size=18),
-                ft.Text("Registrar Nuevo Pago", color="white", weight=ft.FontWeight.BOLD, size=14)
+                self.icon_tab_registro,
+                self.lbl_tab_registro
             ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
             bgcolor="#1565C0",
             padding=ft.Padding.symmetric(vertical=10, horizontal=20),
@@ -335,10 +330,13 @@ class NominaView(ft.Container):
             on_click=lambda e: self.cambiar_pestana(0, e)
         )
 
+        self.icon_tab_historial = ft.Icon(ft.Icons.HISTORY, color="#555555", size=18)
+        self.lbl_tab_historial = ft.Text("Consultar Historial", color="#555555", weight=ft.FontWeight.BOLD, size=14)
+
         self.btn_tab_historial = ft.Container(
             content=ft.Row([
-                ft.Icon(ft.Icons.HISTORY, color="#555555", size=18),
-                ft.Text("Consultar Historial", color="#555555", weight=ft.FontWeight.BOLD, size=14)
+                self.icon_tab_historial,
+                self.lbl_tab_historial
             ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
             bgcolor="#E0E0E0",
             padding=ft.Padding.symmetric(vertical=10, horizontal=20),
@@ -365,20 +363,20 @@ class NominaView(ft.Container):
 
         if indice == 0:
             self.btn_tab_registro.bgcolor = "#1565C0"
-            self.btn_tab_registro.content.controls[0].color = "white"
-            self.btn_tab_registro.content.controls[1].color = "white"
+            self.icon_tab_registro.color = "white"
+            self.lbl_tab_registro.color = "white"
 
             self.btn_tab_historial.bgcolor = "#E0E0E0"
-            self.btn_tab_historial.content.controls[0].color = "#555555"
-            self.btn_tab_historial.content.controls[1].color = "#555555"
+            self.icon_tab_historial.color = "#555555"
+            self.lbl_tab_historial.color = "#555555"
         else:
             self.btn_tab_registro.bgcolor = "#E0E0E0"
-            self.btn_tab_registro.content.controls[0].color = "#555555"
-            self.btn_tab_registro.content.controls[1].color = "#555555"
+            self.icon_tab_registro.color = "#555555"
+            self.lbl_tab_registro.color = "#555555"
 
             self.btn_tab_historial.bgcolor = "#1565C0"
-            self.btn_tab_historial.content.controls[0].color = "white"
-            self.btn_tab_historial.content.controls[1].color = "white"
+            self.icon_tab_historial.color = "white"
+            self.lbl_tab_historial.color = "white"
 
             self.cargar_historial_tabla(e.page if hasattr(e, 'page') else None)
 
@@ -453,7 +451,7 @@ class NominaView(ft.Container):
         self._actualizar_tarjeta_resumen()
         e.page.update()
 
-    def procesar_pago_click(self, e, generar_pdf=False):
+    def procesar_pago_click(self, e, generar_pdf=True):
         chofer_id = self.dd_chofer_registro.value
         if not chofer_id:
             self.mostrar_mensaje(e.page, "Por favor seleccione un chofer.", "red")
@@ -463,7 +461,7 @@ class NominaView(ft.Container):
             self.mostrar_mensaje(e.page, "No hay fletes pendientes para registrar este pago.", "red")
             return
 
-        viajes_ids = [v.id_viaje for v in self.fletes_pendientes_actuales]
+        viajes_ids: list[int] = [int(getattr(v, 'id_viaje')) for v in self.fletes_pendientes_actuales]
         f_emision = datetime.now().strftime("%Y-%m-%d")
         f_desde = self.txt_fecha_desde_reg.value or f_emision
         f_hasta = self.txt_fecha_hasta_reg.value or f_emision
@@ -481,7 +479,8 @@ class NominaView(ft.Container):
             
             if generar_pdf:
                 try:
-                    nomina_full, chofer_obj, viajes_full = obtener_detalles_nomina(nueva_nomina.id_nomina)
+                    id_nom_int = int(getattr(nueva_nomina, 'id_nomina'))
+                    nomina_full, chofer_obj, viajes_full = obtener_detalles_nomina(id_nom_int)
                     pdf_path = generar_pdf_recibo_nomina(nomina_full, chofer_obj, viajes_full)
                     abrir_pdf(pdf_path)
                     self.mostrar_mensaje(e.page, f"PDF generado y abierto: {pdf_path}", "green")
@@ -513,16 +512,17 @@ class NominaView(ft.Container):
         self.tabla_historial.rows.clear()
         if self.historial_nominas:
             for n in self.historial_nominas:
-                nid = n.id_nomina
+                nid = int(getattr(n, 'id_nomina'))
                 recibo_str = f"NOM-{nid:05d}"
-                f_emision = _formatear_fecha(n.fecha_emision, "%d/%m/%Y")
+                f_emision = _formatear_fecha(getattr(n, 'fecha_emision', None), "%d/%m/%Y")
                 
-                chofer_str = n.chofer.nombre_completo if getattr(n, 'chofer', None) else "N/A"
-                periodo_str = f"{_formatear_fecha(n.periodo_desde, '%d/%m')} al {_formatear_fecha(n.periodo_hasta, '%d/%m/%Y')}"
+                chofer_obj = getattr(n, 'chofer', None)
+                chofer_str = str(chofer_obj.nombre_completo) if chofer_obj and hasattr(chofer_obj, 'nombre_completo') else "N/A"
+                periodo_str = f"{_formatear_fecha(getattr(n, 'periodo_desde', None), '%d/%m')} al {_formatear_fecha(getattr(n, 'periodo_hasta', None), '%d/%m/%Y')}"
                 
-                tot_fletes = float(n.total_ingresos_fletes or 0)
-                tot_gasoil = float(n.total_costo_gasoil or 0)
-                pago_chofer = float(n.monto_neto_comision or 0)
+                tot_fletes = float(getattr(n, 'total_ingresos_fletes', 0) or 0)
+                tot_gasoil = float(getattr(n, 'total_costo_gasoil', 0) or 0)
+                pago_chofer = float(getattr(n, 'monto_neto_comision', 0) or 0)
 
                 self.tabla_historial.rows.append(
                     ft.DataRow(cells=[
@@ -571,7 +571,7 @@ class NominaView(ft.Container):
 
     def reimprimir_pdf_click(self, e, id_nomina):
         try:
-            nomina_obj, chofer_obj, viajes_lista = obtener_detalles_nomina(id_nomina)
+            nomina_obj, chofer_obj, viajes_lista = obtener_detalles_nomina(int(id_nomina))
             if nomina_obj:
                 pdf_path = generar_pdf_recibo_nomina(nomina_obj, chofer_obj, viajes_lista)
                 abrir_pdf(pdf_path)
@@ -582,7 +582,7 @@ class NominaView(ft.Container):
             self.mostrar_mensaje(e.page, f"Error al generar PDF: {ex}", "red")
 
     def ver_detalle_click(self, e, id_nomina):
-        nomina_obj, chofer_obj, viajes_lista = obtener_detalles_nomina(id_nomina)
+        nomina_obj, chofer_obj, viajes_lista = obtener_detalles_nomina(int(id_nomina))
         if not nomina_obj:
             self.mostrar_mensaje(e.page, "No se encontró el registro.", "red")
             return
@@ -613,16 +613,23 @@ class NominaView(ft.Container):
                 ft.DataCell(ft.Text(f"${gasoil_v:,.2f}")),
             ]))
 
-        tabla_det = ft.DataTable(columns=cols_det, rows=rows_det)
+        tabla_det = ft.DataTable(columns=cols_det, rows=rows_det)  # type: ignore
 
-        self.modal_detalle.title = ft.Text(f"Detalle Recibo NOM-{id_nomina:05d} - {chofer_obj.nombre_completo if chofer_obj else ''}")
+        tot_f = float(getattr(nomina_obj, 'total_ingresos_fletes', 0) or 0)
+        tot_g = float(getattr(nomina_obj, 'total_costo_gasoil', 0) or 0)
+        monto_n = float(getattr(nomina_obj, 'monto_neto_comision', 0) or 0)
+        p_desde = getattr(nomina_obj, 'periodo_desde', None)
+        p_hasta = getattr(nomina_obj, 'periodo_hasta', None)
+        c_name = getattr(chofer_obj, 'nombre_completo', '') if chofer_obj else ''
+
+        self.modal_detalle.title = ft.Text(f"Detalle Recibo NOM-{id_nomina:05d} - {c_name}")
         self.modal_detalle.content = ft.Container(
             width=650,
             height=400,
             content=ft.Column([
-                ft.Text(f"Período: {_formatear_fecha(nomina_obj.periodo_desde, '%d/%m/%Y')} al {_formatear_fecha(nomina_obj.periodo_hasta, '%d/%m/%Y')}"),
-                ft.Text(f"Total Fletes: ${float(nomina_obj.total_ingresos_fletes or 0):,.2f} | Total Gasoil: ${float(nomina_obj.total_costo_gasoil or 0):,.2f}"),
-                ft.Text(f"Pago Neto Chofer (20%): ${float(nomina_obj.monto_neto_comision or 0):,.2f}", weight=ft.FontWeight.BOLD, color="green"),
+                ft.Text(f"Período: {_formatear_fecha(p_desde, '%d/%m/%Y')} al {_formatear_fecha(p_hasta, '%d/%m/%Y')}"),
+                ft.Text(f"Total Fletes: ${tot_f:,.2f} | Total Gasoil: ${tot_g:,.2f}"),
+                ft.Text(f"Pago Neto Chofer (20%): ${monto_n:,.2f}", weight=ft.FontWeight.BOLD, color="green"),
                 ft.Divider(),
                 ft.Container(content=ft.ListView([tabla_det], expand=True), expand=True)
             ])

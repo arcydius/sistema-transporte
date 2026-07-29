@@ -187,6 +187,26 @@ def verificar_credenciales(username: str, password: str):
     finally:
         db.close()
 
+def asegurar_usuario_default():
+    """Garantiza que exista al menos un usuario administrador por defecto (admin / admin123)."""
+    db = SessionLocal()
+    try:
+        count = db.query(Administrador).count()
+        if count == 0:
+            user_default = Administrador(
+                username="admin",
+                password_hash=hash_password("admin123"),
+                nombre_completo="Administrador Principal"
+            )
+            db.add(user_default)
+            db.commit()
+            print("[+] Usuario administrador por defecto creado (admin / admin123).")
+    except Exception as e:
+        db.rollback()
+        print(f"[-] Error asegurando usuario default: {e}")
+    finally:
+        db.close()
+
 # ==========================================
 # GESTIÓN DE RESPALDOS (BACKUPS)
 # ==========================================

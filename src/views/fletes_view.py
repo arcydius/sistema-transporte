@@ -11,6 +11,7 @@ from controllers.maestro_controller import (
     actualizar_estatus_viaje,
     eliminar_viaje
 )
+from utils.pdf_generator import generar_pdf_reporte_fletes, seleccionar_carpeta_destino, abrir_pdf
 
 def _formatear_fecha(fecha, fmt="%d/%m/%Y"):
     if not fecha:
@@ -158,6 +159,15 @@ class FletesView(ft.Container):
             on_click=self.limpiar_filtros_historial
         )
 
+        self.file_picker_reporte = ft.FilePicker()
+        self.btn_exportar_reporte = ft.Button(
+            content=ft.Text("Generar Reporte PDF"),
+            icon=ft.Icons.PICTURE_AS_PDF,
+            bgcolor="#2E7D32",
+            color="white",
+            on_click=self.generar_reporte_fletes_click
+        )
+
         self.tabla_historial_viajes = ft.DataTable(  # type: ignore
             expand=True,
             column_spacing=30,
@@ -190,12 +200,14 @@ class FletesView(ft.Container):
     def _on_fecha_desde_filtro_change(self, e):
         if hasattr(self.dp_desde_filtro, 'value') and self.dp_desde_filtro.value:
             self.txt_fecha_desde_filtro.value = _formatear_fecha(self.dp_desde_filtro.value, "%Y-%m-%d")
-            self.update()
+            if hasattr(e, 'page') and e.page:
+                e.page.update()
 
     def _on_fecha_hasta_filtro_change(self, e):
         if hasattr(self.dp_hasta_filtro, 'value') and self.dp_hasta_filtro.value:
             self.txt_fecha_hasta_filtro.value = _formatear_fecha(self.dp_hasta_filtro.value, "%Y-%m-%d")
-            self.update()
+            if hasattr(e, 'page') and e.page:
+                e.page.update()
 
     def inicializar_vista(self):
         self.cargar_datos_bd()
@@ -268,7 +280,7 @@ class FletesView(ft.Container):
                     ft.Row([self.txt_fecha_desde_filtro, self.btn_picker_desde_filtro], expand=True),
                     ft.Row([self.txt_fecha_hasta_filtro, self.btn_picker_hasta_filtro], expand=True),
                 ]),
-                ft.Row([self.btn_filtrar_historial, self.btn_limpiar_filtros], alignment=ft.MainAxisAlignment.END, spacing=10),
+                ft.Row([self.btn_filtrar_historial, self.btn_limpiar_filtros, self.btn_exportar_reporte], alignment=ft.MainAxisAlignment.END, spacing=10),
                 ft.Container(height=10),
                 ft.Container(
                     content=ft.Row([self.tabla_historial_viajes], expand=True, scroll=ft.ScrollMode.AUTO),
@@ -529,6 +541,56 @@ class FletesView(ft.Container):
         self.txt_fecha_desde_filtro.value = ""
         self.txt_fecha_hasta_filtro.value = ""
         self.cargar_tabla_historial_viajes(e.page)
+
+    def generar_reporte_fletes_click(self, e):
+        page = e.page if hasattr(e, 'page') and e.page else getattr(self, 'page', None)
+
+        carpeta_destino = seleccionar_carpeta_destino(
+            titulo="Seleccionar carpeta para guardar el reporte de Fletes / Viajes"
+        )
+
+        if not carpeta_destino:
+            if page:
+                self.mostrar_mensaje(page, "Generación de reporte cancelada (no se seleccionó carpeta).", "orange")
+            return
+
+        chofer_id = self.dd_filtro_chofer.value
+        f_desde = self.txt_fecha_desde_filtro.value
+        f_hasta = self.txt_fecha_hasta_filtro.value
+
+        chofer_nombre = None
+        if chofer_id and chofer_id != "all":
+            opcion = next((opt for opt in self.dd_filtro_chofer.options if opt.key == chofer_id), None)
+            if opcion:
+                chofer_nombre = opcion.text
+
+        viajes = obtener_viajes_filtrados(
+            id_chofer=chofer_id,
+            fecha_desde=f_desde,
+            fecha_hasta=f_hasta
+        )
+
+        try:
+            pdf_path = generar_pdf_reporte_fletes(
+                viajes=viajes,
+                filtro_chofer_nombre=chofer_nombre,
+                fecha_desde=f_desde,
+                fecha_hasta=f_hasta,
+                output_dir=carpeta_destino
+            )
+            abrir_pdf(pdf_path)
+            self.banner_mensaje.color = "green"
+            self.banner_mensaje.value = f"✅ Reporte PDF guardado exitosamente en: {pdf_path}"
+            if page:
+                self.mostrar_mensaje(page, f"Reporte de Fletes guardado en: {pdf_path}", "green")
+                page.update()
+        except Exception as ex:
+            print(f"Error generando reporte PDF de fletes: {ex}")
+            self.banner_mensaje.color = "red"
+            self.banner_mensaje.value = f"❌ Error generando reporte PDF: {str(ex)}"
+            if page:
+                self.mostrar_mensaje(page, f"Error al generar reporte PDF: {ex}", "red")
+                page.update()
 
     def abrir_modal_editar_estatus(self, e, id_viaje: int, estatus_actual: str):
         dd_nuevo_estatus = ft.Dropdown(

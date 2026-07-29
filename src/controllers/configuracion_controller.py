@@ -191,13 +191,15 @@ def verificar_credenciales(username: str, password: str):
 # GESTIÓN DE RESPALDOS (BACKUPS)
 # ==========================================
 def obtener_directorio_backups(custom_dir: str | None = None) -> str:
-    """Obtiene la ruta del directorio de respaldos, creándolo si no existe."""
+    """Obtiene la ruta del directorio de respaldos en la carpeta Documentos del usuario."""
     if custom_dir and os.path.exists(custom_dir):
         return custom_dir
     
-    # Directorio predeterminado 'backups' en la raíz del proyecto
-    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    backup_dir = os.path.join(base_dir, "backups")
+    user_docs = os.path.expanduser("~/Documents")
+    if not os.path.exists(user_docs):
+        user_docs = os.path.expanduser("~")
+    
+    backup_dir = os.path.join(user_docs, "SGTM", "Backups")
     os.makedirs(backup_dir, exist_ok=True)
     return backup_dir
 
@@ -248,22 +250,34 @@ def crear_backup(directorio_destino: str | None = None):
         return False, f"Error al generar respaldo: {str(e)}"
 
 def obtener_lista_backups(directorio_destino: str | None = None):
-    """Devuelve la lista de archivos de respaldo disponibles."""
+    """Devuelve la lista de archivos de respaldo disponibles en Documentos y carpeta local."""
     try:
         backup_dir = obtener_directorio_backups(directorio_destino)
+        directorios = [backup_dir]
+        
+        # También buscar en la carpeta 'backups' del proyecto por retrocompatibilidad
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        local_backup_dir = os.path.join(base_dir, "backups")
+        if os.path.exists(local_backup_dir) and local_backup_dir not in directorios:
+            directorios.append(local_backup_dir)
+
         backups = []
-        if os.path.exists(backup_dir):
-            for file in sorted(os.listdir(backup_dir), reverse=True):
-                if file.endswith(".sql") or file.endswith(".db") or file.endswith(".bak"):
-                    full_path = os.path.join(backup_dir, file)
-                    stat = os.stat(full_path)
-                    backups.append({
-                        "filename": file,
-                        "filepath": full_path,
-                        "size_bytes": stat.st_size,
-                        "fecha": datetime.datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
-                    })
-        return backups
+        archivos_procesados = set()
+
+        for d in directorios:
+            if os.path.exists(d):
+                for file in sorted(os.listdir(d), reverse=True):
+                    if (file.endswith(".sql") or file.endswith(".db") or file.endswith(".bak")) and file not in archivos_procesados:
+                        archivos_procesados.add(file)
+                        full_path = os.path.join(d, file)
+                        stat = os.stat(full_path)
+                        backups.append({
+                            "filename": file,
+                            "filepath": full_path,
+                            "size_bytes": stat.st_size,
+                            "fecha": datetime.datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+                        })
+        return sorted(backups, key=lambda x: x["filename"], reverse=True)
     except Exception as e:
         print(f"Error al listar respaldos: {e}")
         return []
